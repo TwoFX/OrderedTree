@@ -27,14 +27,28 @@ theorem Ordering.swap_eq_gt {o : Ordering} : o.swap = .gt ↔ o = .lt := by
 theorem Ordering.isLE_iff_eq_lt_or_eq_eq {o : Ordering} : o.isLE ↔ o = .lt ∨ o = .eq := by
   cases o <;> simp [isLE]
 
+theorem Ordering.isLE_of_eq_lt {o : Ordering} : o = .lt → o.isLE := by
+  rintro rfl; rfl
+
+theorem Ordering.eq_one {o : Ordering} : o = .lt ∨ o = .gt ∨ o = .eq := by
+  cases o <;> simp
+
 -- https://github.com/leanprover/lean4/issues/5295
 instance : LawfulBEq Ordering where
   eq_of_beq {a b} := by cases a <;> cases b <;> simp <;> rfl
   rfl {a} := by cases a <;> rfl
 
+theorem LawfulBEq.beq_eq_eq {α : Type u} [BEq α] [LawfulBEq α] {a b : α} : (a == b) = (a = b) := by
+  by_cases h : a = b
+  · subst h
+    simp
+  · cases h : a == b
+    · simpa
+    · simpa using eq_of_beq h
+
 variable {α : Type u} {β : α → Type v}
 
-/-- More usable version of `List.minimum?`. -/
+/-- More usable version of `List.minimum?`. This one is not tail-recursive, which is fine because you're not supposed to execute it. -/
 def min? [Min α] : List α → Option α
   | [] => none
   | (x::xs) => min (some x) (min? xs)
@@ -58,8 +72,7 @@ theorem beq_iff {a b : α} : (a == b) ↔ compare a b = .eq := by
 
 theorem le_of_lt {a b : α} : a < b → a ≤ b := by
   rw [le_iff, lt_iff]
-  intro h
-  rw [h, Ordering.isLE]
+  exact Ordering.isLE_of_eq_lt
 
 theorem le_iff_lt_or_beq {a b : α} : a ≤ b ↔ a < b ∨ a == b := by
   simpa [le_iff, lt_iff, beq_iff] using Ordering.isLE_iff_eq_lt_or_eq_eq
@@ -67,10 +80,23 @@ theorem le_iff_lt_or_beq {a b : α} : a ≤ b ↔ a < b ∨ a == b := by
 theorem le_of_beq {a b : α} (h : a == b) : a ≤ b :=
   le_iff_lt_or_beq.2 <| Or.inr h
 
+theorem not_lt_of_beq {a b : α} : a == b → ¬a < b := by
+  simp only [beq_iff, lt_iff]
+  cases compare a b <;> simp
+
+theorem beq_eq_false_of_lt {a b : α} : a < b → (a == b) = false := by
+  simp only [beq_eq, lt_iff]
+  cases compare a b <;> simp
+
 /-- Class for "oriented" ordering functions. -/
 class OrientedOrd (α : Type u) [Ord α] where
   /-- Swapping the arguments to `compare` swaps the result. -/
   eq_swap {a b : α} : compare a b = (compare b a).swap
+
+theorem lt_or_lt_or_beq [OrientedOrd α] (a b : α) : a < b ∨ b < a ∨ a == b := by
+  simp only [le_iff, lt_iff, beq_eq]
+  rw [OrientedOrd.eq_swap (a := b) (b := a)]
+  cases compare a b <;> simp [Ordering.swap]
 
 @[simp]
 theorem compare_self [OrientedOrd α] {a : α} : compare a a = .eq := by
@@ -80,7 +106,13 @@ theorem compare_self [OrientedOrd α] {a : α} : compare a a = .eq := by
 theorem beq_refl [OrientedOrd α] {a : α} : a == a := by
   simp [beq_iff]
 
-theorem beq_symm [OrientedOrd α] {a b : α} (h : a == b) : b == a := sorry
+theorem beq_symm [OrientedOrd α] {a b : α} (h : a == b) : b == a := by
+  rw [beq_iff] at h
+  rw [beq_iff, OrientedOrd.eq_swap, h, Ordering.swap]
+
+theorem beq_comm [OrientedOrd α] (a b : α) : (a == b) = (b == a) := by
+  rw [beq_eq, beq_eq, OrientedOrd.eq_swap]
+  cases compare b a <;> simp [Ordering.swap, Bool.beq_eq_decide_eq]
 
 theorem irrefl [OrientedOrd α] {a b : α} : a ≤ b → b ≤ a → a == b := by
   rw [le_iff, le_iff, beq_iff, OrientedOrd.eq_swap (a := b)]
@@ -100,8 +132,6 @@ class TransOrd (α : Type u) [Ord α] extends OrientedOrd α where
   /-- ≤ is transitive. -/
   le_trans {a b c : α} : (compare a b).isLE → (compare b c).isLE → (compare a c).isLE
 
-theorem beq_trans [TransOrd α] {a b c : α} (h₁ : a == b) (h₂ : b == c) : a == b := sorry
-
 theorem le_trans [TransOrd α] {a b c : α} : a ≤ b → b ≤ c → a ≤ c := by
   simpa [le_iff] using TransOrd.le_trans
 
@@ -111,11 +141,40 @@ theorem lt_of_lt_of_beq [TransOrd α] {a b c : α} (h₁ : a < b) (h₂ : b == c
   have := not_lt_iff_le.2 (le_trans (le_of_beq h₂) h₃)
   contradiction
 
-theorem lt_of_beq_of_lt {a b c : α} : a == b → b < c → a < c := sorry
+theorem lt_of_beq_of_lt [TransOrd α] {a b c : α} (h₁ : a == b) (h₂ : b < c) : a < c := by
+  rw [← not_le_iff_lt]
+  intro h₃
+  have := not_lt_iff_le.2 (le_trans h₃ (le_of_beq h₁))
+  contradiction
 
-theorem lt_trans [TransOrd α] {a b c : α} : a < b → b < c → a < c := sorry
+theorem lt_trans [TransOrd α] {a b c : α} : a < b → b < c → a < c := by
+  intro hab hbc
+  rcases lt_or_lt_or_beq a c with (h|h|h)
+  · exact h
+  · have := not_lt_iff_le.2 (le_trans (le_of_lt hbc) (le_of_lt h))
+    contradiction
+  · have := not_lt_iff_le.2 (le_of_lt (lt_of_lt_of_beq hbc (beq_symm h)))
+    contradiction
 
-theorem lt_of_le_of_lt [TransOrd α] {a b c : α} : a ≤ b → b < c → a < c := sorry
+theorem beq_trans [TransOrd α] {a b c : α} (h₁ : a == b) (h₂ : b == c) : a == c := by
+  rcases lt_or_lt_or_beq a c with (h|h|h)
+  · rw [beq_eq_false_of_lt (lt_of_lt_of_beq h (beq_symm h₂))] at h₁
+    contradiction
+  · rw [beq_comm, beq_eq_false_of_lt (lt_of_beq_of_lt h₂ h)] at h₁
+    contradiction
+  · exact h
+
+theorem lt_of_le_of_lt [TransOrd α] {a b c : α} : a ≤ b → b < c → a < c := by
+  intros hab hbc
+  rcases le_iff_lt_or_beq.1 hab with (hab|hab)
+  · exact lt_trans hab hbc
+  . exact lt_of_beq_of_lt hab hbc
+
+theorem lt_of_lt_of_le [TransOrd α] {a b c : α} : a < b → b ≤ c → a < c := by
+  intros hab hbc
+  rcases le_iff_lt_or_beq.1 hbc with (hbc|hbc)
+  · exact lt_trans hab hbc
+  · exact lt_of_lt_of_beq hab hbc
 
 local instance : Max α where
   max a b := if a ≤ b then b else a
@@ -136,6 +195,9 @@ def lowerBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β
 def upperBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
   xs.filter (fun p => p.1 < k) |> min?
 
+@[simp]
+theorem lowerBound?_nil {k : α} : lowerBound? ([] : List ((a : α) × β a)) k = none := rfl
+
 theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
     lowerBound? (⟨k, v⟩ :: l) a =
       if k < a then lowerBound? l a else min (some ⟨k, v⟩) (lowerBound? l a) := by
@@ -150,9 +212,9 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
 
-theorem lowerBound?_insertEntry (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
+theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
     lowerBound? (insertEntry k v xs) a =
-      if k ≤ a then lowerBound? xs a else min (lowerBound? xs a) (some ⟨k, v⟩) :=
+      if k ≤ a then lowerBound? xs a else min (lowerBound? xs a) (some ⟨k, v⟩) := by
   sorry
 
 end Std.DHashMap.Internal.List
