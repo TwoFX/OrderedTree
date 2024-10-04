@@ -48,14 +48,6 @@ theorem LawfulBEq.beq_eq_eq {α : Type u} [BEq α] [LawfulBEq α] {a b : α} : (
 
 variable {α : Type u} {β : α → Type v}
 
-/-- More usable version of `List.minimum?`. This one is not tail-recursive, which is fine because you're not supposed to execute it. -/
-def min? [Min α] : List α → Option α
-  | [] => none
-  | (x::xs) => min (some x) (min? xs)
-
-theorem min?_nil [Min α] : min? ([] : List α) = none := rfl
-theorem min?_cons [Min α] {x : α} {xs : List α} : min? (x::xs) = min (some x) (min? xs) := rfl
-
 variable [Ord α]
 
 /-- `a == b` is defined as `compare a b == .eq`. -/
@@ -182,29 +174,61 @@ local instance : Max α where
 local instance : Min α where
   min a b := if a ≤ b then a else b
 
+theorem min_def {a b : α} : min a b = if a ≤ b then a else b := rfl
+
+-- Is this provable without `TransOrd`?
+local instance [TransOrd α] : Std.Associative (min : α → α → α) where
+  assoc a b c := by
+    simp only [min_def]
+    split <;> split <;> (try split) <;> try rfl
+    · rename_i hab hac hbc
+      have := le_trans hab hbc
+      contradiction
+    · rename_i hab hbc hac
+      rw [not_le_iff_lt] at hab hbc
+      have := lt_trans hbc hab
+      rw [← not_lt_iff_le] at hac
+      contradiction
+
 local instance : Min ((a : α) × β a) where
   min a b := if a.1 ≤ b.1 then a else b
+
+theorem min_def' {p q : (a : α) × β a} : min p q = if p.1 ≤ q.1 then p else q := rfl
+
+-- Is this provable without `TransOrd`?
+local instance [TransOrd α] : Std.Associative (min : (a : α) × β a → (a : α) × β a → (a : α) × β a) where
+  assoc a b c := by
+    simp only [min_def']
+    split <;> split <;> (try split) <;> try rfl
+    · rename_i hab hac hbc
+      have := le_trans hab hbc
+      contradiction
+    · rename_i hab hbc hac
+      rw [not_le_iff_lt] at hab hbc
+      have := lt_trans hbc hab
+      rw [← not_lt_iff_le] at hac
+      contradiction
 
 namespace Std.DHashMap.Internal.List
 
 /-- The smallest element of `xs` that is not less than `k`. -/
 def lowerBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
-  xs.filter (fun p => k ≤ p.1) |> min?
+  xs.filter (fun p => k ≤ p.1) |>.min?
 
 /-- The smallest element of `xs` that is greater than `k`. -/
 def upperBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
-  xs.filter (fun p => p.1 < k) |> min?
+  xs.filter (fun p => p.1 < k) |>.min?
 
 @[simp]
 theorem lowerBound?_nil {k : α} : lowerBound? ([] : List ((a : α) × β a)) k = none := rfl
 
 theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
     lowerBound? (⟨k, v⟩ :: l) a =
-      if k < a then lowerBound? l a else min (some ⟨k, v⟩) (lowerBound? l a) := by
+      if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
   rw [lowerBound?, List.filter_cons]
   simp only [decide_eq_true_eq]
   split
-  · rw [min?_cons]
+  · rw [List.min?_cons]
     split
     · exact False.elim (not_lt_self (lt_of_le_of_lt (b := k) ‹_› ‹_›))
     · rfl
