@@ -127,7 +127,7 @@ theorem False.elim' {h : False} {P : α → Prop} : P h.elim :=
 
 theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : AlmostBalancedAtRootL l.size r.size} :
     (balanceL k v l r hrb hlb hlr).Balanced := by
-  rw [balanceL]
+  rw [balanceL.eq_def]
   split
   · split
     · exact balanced_singleton
@@ -138,7 +138,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
     · rename_i l r hlb _ _
       have := hlb.size_leaf_right
       rw [hlb.eq, hlb.left.eq, size, size_leaf] at this
-      dsimp only at this
+      -- dsimp only at this
       obtain rfl : l = .leaf := hlb.left.left.size_eq_zero (by omega)
       obtain rfl : r = .leaf := hlb.left.right.size_eq_zero (by omega)
       rw [hlb.left.eq]
@@ -152,7 +152,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
         exact Or.inl (by simp only [size]; omega)
       · rename_i hrb _ _ _ _ _
         simp [delta, hrb.eq, size] at hlr
-        omega
+        -- omega
     · split
       · split
         · split
