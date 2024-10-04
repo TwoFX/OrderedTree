@@ -48,7 +48,52 @@ theorem LawfulBEq.beq_eq_eq {α : Type u} [BEq α] [LawfulBEq α] {a b : α} : (
 
 variable {α : Type u} {β : α → Type v}
 
+namespace Std.DHashMap.Internal.List
+
+theorem mem_replaceEntry [BEq α] [PartialEquivBEq α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (p : (a : α) × β a) (hxs : DistinctKeys xs) :
+    p ∈ replaceEntry k v xs ↔ ((p.1 == k) = false ∧ p ∈ xs) ∨ (containsKey k xs ∧ p = ⟨k, v⟩) := by
+  induction xs using assoc_induction
+  · simp
+  · next k' v' xs ih =>
+    simp only [replaceEntry_cons, List.mem_cons, containsKey_cons, Bool.or_eq_true]
+    cases hk'k : k' == k
+    · simp only [cond_false, List.mem_cons, Bool.false_eq_true, false_or]
+      refine ⟨?_, ?_⟩
+      · rintro (rfl|h)
+        · exact Or.inl ⟨hk'k, Or.inl rfl⟩
+        · rcases (ih hxs.tail).1 h with (h|h)
+          · exact Or.inl ⟨h.1, Or.inr h.2⟩
+          · exact Or.inr h
+      · rintro (⟨h₁, (h₂|h₂)⟩|h)
+        · exact Or.inl h₂
+        · exact Or.inr ((ih hxs.tail).2 (Or.inl ⟨h₁, h₂⟩))
+        · exact Or.inr ((ih hxs.tail).2 (Or.inr h))
+    · simp only [cond_true, List.mem_cons, true_or, true_and]
+      refine ⟨?_, ?_⟩
+      · rintro (rfl|h)
+        · exact Or.inr rfl
+        · cases hp : p.fst == k
+          · exact Or.inl ⟨rfl, Or.inr h⟩
+          · have := hxs.containsKey_eq_false
+            rw [Bool.eq_false_iff, ne_eq, containsKey_eq_true_iff_exists_mem, not_exists] at this
+            simp only [not_and, Bool.not_eq_true] at this
+            have := this _ h
+            rw [BEq.trans hp (BEq.symm hk'k)] at this
+            contradiction
+      · rintro (⟨h₁,(rfl|h₂)⟩|rfl)
+        · simp [h₁] at hk'k
+        · exact Or.inr h₂
+        · exact Or.inl rfl
+
+end Std.DHashMap.Internal.List
+
 variable [Ord α]
+
+-- TODO: mark Ordering.isLE as @[inline]
+
+/-- Minimum as implemented via `Ord`. -/
+def Ord.min {a b : α} : α :=
+  if (compare a b).isLE then a else b
 
 /-- `a == b` is defined as `compare a b == .eq`. -/
 def beqOfOrd : BEq α where
@@ -156,6 +201,11 @@ theorem beq_trans [TransOrd α] {a b c : α} (h₁ : a == b) (h₂ : b == c) : a
     contradiction
   · exact h
 
+local instance [TransOrd α] : EquivBEq α where
+  symm := beq_symm
+  trans := beq_trans
+  refl := beq_refl
+
 theorem lt_of_le_of_lt [TransOrd α] {a b c : α} : a ≤ b → b < c → a < c := by
   intros hab hbc
   rcases le_iff_lt_or_beq.1 hab with (hab|hab)
@@ -236,9 +286,14 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
 
+-- Plan: prove `lowerBound? xs k = some p ↔ p ∈ xs ∧ ∀ q ∈ xs, q.1 < k ∨ p.1 ≤ q.1` and then use `mem_lowerBound` from above.
+
+theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : containsKey k xs) :
+    lowerBound? (replaceEntry k v xs) a = if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min · ⟨k, v⟩)) := sorry
+
 theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
     lowerBound? (insertEntry k v xs) a =
-      if k ≤ a then lowerBound? xs a else min (lowerBound? xs a) (some ⟨k, v⟩) := by
+      if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min · ⟨k, v⟩)) := by
   sorry
 
 end Std.DHashMap.Internal.List
