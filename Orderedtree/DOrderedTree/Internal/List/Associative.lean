@@ -286,7 +286,7 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
 
--- Plan: prove `lowerBound? xs k = some p ↔ p ∈ xs ∧ ∀ q ∈ xs, q.1 < k ∨ p.1 ≤ q.1` and then use `mem_lowerBound` from above.
+-- Plan: prove `lowerBound? xs k = some p ↔ p ∈ xs ∧ ∀ q ∈ xs, q.1 < k ∨ p.1 ≤ q.1` and then use `mem_replaceEntry` from above.
 
 theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : containsKey k xs) :
     lowerBound? (replaceEntry k v xs) a = if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min · ⟨k, v⟩)) := sorry
