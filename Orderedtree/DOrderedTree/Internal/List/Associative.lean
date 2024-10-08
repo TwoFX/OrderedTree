@@ -30,9 +30,6 @@ theorem Ordering.isLE_iff_eq_lt_or_eq_eq {o : Ordering} : o.isLE ↔ o = .lt ∨
 theorem Ordering.isLE_of_eq_lt {o : Ordering} : o = .lt → o.isLE := by
   rintro rfl; rfl
 
-theorem Ordering.eq_one {o : Ordering} : o = .lt ∨ o = .gt ∨ o = .eq := by
-  cases o <;> simp
-
 -- https://github.com/leanprover/lean4/issues/5295
 instance : LawfulBEq Ordering where
   eq_of_beq {a b} := by cases a <;> cases b <;> simp <;> rfl
@@ -49,41 +46,6 @@ theorem LawfulBEq.beq_eq_eq {α : Type u} [BEq α] [LawfulBEq α] {a b : α} : (
 variable {α : Type u} {β : α → Type v}
 
 namespace Std.DHashMap.Internal.List
-
-theorem mem_replaceEntry [BEq α] [PartialEquivBEq α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (p : (a : α) × β a) (hxs : DistinctKeys xs) :
-    p ∈ replaceEntry k v xs ↔ ((p.1 == k) = false ∧ p ∈ xs) ∨ (containsKey k xs ∧ p = ⟨k, v⟩) := by
-  induction xs using assoc_induction
-  · simp
-  · next k' v' xs ih =>
-    simp only [replaceEntry_cons, List.mem_cons, containsKey_cons, Bool.or_eq_true]
-    cases hk'k : k' == k
-    · simp only [cond_false, List.mem_cons, Bool.false_eq_true, false_or]
-      refine ⟨?_, ?_⟩
-      · rintro (rfl|h)
-        · exact Or.inl ⟨hk'k, Or.inl rfl⟩
-        · rcases (ih hxs.tail).1 h with (h|h)
-          · exact Or.inl ⟨h.1, Or.inr h.2⟩
-          · exact Or.inr h
-      · rintro (⟨h₁, (h₂|h₂)⟩|h)
-        · exact Or.inl h₂
-        · exact Or.inr ((ih hxs.tail).2 (Or.inl ⟨h₁, h₂⟩))
-        · exact Or.inr ((ih hxs.tail).2 (Or.inr h))
-    · simp only [cond_true, List.mem_cons, true_or, true_and]
-      refine ⟨?_, ?_⟩
-      · rintro (rfl|h)
-        · exact Or.inr rfl
-        · cases hp : p.fst == k
-          · exact Or.inl ⟨rfl, Or.inr h⟩
-          · have := hxs.containsKey_eq_false
-            rw [Bool.eq_false_iff, ne_eq, containsKey_eq_true_iff_exists_mem, not_exists] at this
-            simp only [not_and, Bool.not_eq_true] at this
-            have := this _ h
-            rw [BEq.trans hp (BEq.symm hk'k)] at this
-            contradiction
-      · rintro (⟨h₁,(rfl|h₂)⟩|rfl)
-        · simp [h₁] at hk'k
-        · exact Or.inr h₂
-        · exact Or.inl rfl
 
 @[simp]
 theorem getEntry_fst [BEq α] {xs : List ((a : α) × β a)} {k : α} (h : containsKey k xs) :
@@ -223,7 +185,7 @@ theorem beq_trans [TransOrd α] {a b c : α} (h₁ : a == b) (h₂ : b == c) : a
     contradiction
   · exact h
 
-local instance [TransOrd α] : EquivBEq α where
+local instance equivBEqOfTransOrd [TransOrd α] : EquivBEq α where
   symm := beq_symm
   trans := beq_trans
   refl := beq_refl
@@ -240,27 +202,24 @@ theorem lt_of_lt_of_le [TransOrd α] {a b c : α} : a < b → b ≤ c → a < c 
   · exact lt_trans hab hbc
   · exact lt_of_lt_of_beq hab hbc
 
-local instance : Max α where
-  max a b := if a ≤ b then b else a
+-- local instance : Min α where
+--   min a b := if a ≤ b then a else b
 
-local instance : Min α where
-  min a b := if a ≤ b then a else b
+-- theorem min_def {a b : α} : min a b = if a ≤ b then a else b := rfl
 
-theorem min_def {a b : α} : min a b = if a ≤ b then a else b := rfl
-
--- Is this provable without `TransOrd`?
-local instance [TransOrd α] : Std.Associative (min : α → α → α) where
-  assoc a b c := by
-    simp only [min_def]
-    split <;> split <;> (try split) <;> try rfl
-    · rename_i hab hac hbc
-      have := le_trans hab hbc
-      contradiction
-    · rename_i hab hbc hac
-      rw [not_le_iff_lt] at hab hbc
-      have := lt_trans hbc hab
-      rw [← not_lt_iff_le] at hac
-      contradiction
+-- -- Is this provable without `TransOrd`?
+-- local instance [TransOrd α] : Std.Associative (min : α → α → α) where
+--   assoc a b c := by
+--     simp only [min_def]
+--     split <;> split <;> (try split) <;> try rfl
+--     · rename_i hab hac hbc
+--       have := le_trans hab hbc
+--       contradiction
+--     · rename_i hab hbc hac
+--       rw [not_le_iff_lt] at hab hbc
+--       have := lt_trans hbc hab
+--       rw [← not_lt_iff_le] at hac
+--       contradiction
 
 local instance : Min ((a : α) × β a) where
   min a b := if a.1 ≤ b.1 then a else b

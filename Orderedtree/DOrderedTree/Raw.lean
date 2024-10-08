@@ -3,6 +3,8 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
+import Orderedtree.DOrderedTree.Internal.List.Associative
+
 universe u v
 
 -- This closely follows the Haskell implementation at https://hackage.haskell.org/package/containers-0.7/docs/src/Data.Map.Internal.html
@@ -28,6 +30,37 @@ def ratio : Nat := 2
 def size : Raw α β → Nat
   | inner s _ _ _ _ => s
   | leaf => 0
+
+-- TODO: this doesn't really gain you anything over defining it to be `k ∈ keys l.toList`.
+inductive Mem (k : α) : Raw α β → Prop
+  | node {s v l r} : Mem k (Raw.inner s k v l r)
+  | left {s k' v l r} : Mem k l → Mem k (Raw.inner s k' v l r)
+  | right {s k' v l r} : Mem k r → Mem k (Raw.inner s k' v l r)
+
+instance : Membership α (Raw α β) where
+  mem l k := Mem k l
+
+@[simp]
+theorem not_mem_leaf {k : α} : ¬k ∈ (Raw.leaf : Raw α β) := by
+  rintro (_|_|_)
+
+@[simp]
+theorem mem_inner_iff {k : α} {s k' v l r} :
+    k ∈ (Raw.inner s k' v l r : Raw α β) ↔ k ∈ l ∨ k = k' ∨ k ∈ r := by
+  refine ⟨?_, ?_⟩
+  · rintro (_|h|h)
+    · exact Or.inr (Or.inl rfl)
+    · exact Or.inl h
+    · exact Or.inr (Or.inr h)
+  · rintro (h|rfl|h)
+    · exact Mem.left h
+    · exact Mem.node
+    · exact Mem.right h
+
+inductive Ordered [Ord α] : Raw α β → Prop where
+  | leaf : Ordered leaf
+  | inner {s k v l r} : Ordered l → Ordered r →
+      (∀ k' ∈ l, compare k' k = .lt) → (∀ k' ∈ r, compare k k' = .lt) → Ordered (Raw.inner s k v l r)
 
 @[simp] theorem size_leaf : (leaf : Raw α β).size = 0 := rfl
 
@@ -239,28 +272,29 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
         else .inner (1 + ls + rs) k v l r
 
 
-@[specialize] def insert (cmp : α → α → Ordering) (k : α) (v : β k) : Raw α β → Raw α β
+@[specialize] def insert [Ord α] (k : α) (v : β k) : Raw α β → Raw α β
 | leaf => .inner 1 k v .leaf .leaf
-| inner sz ky y l r => match cmp k ky with
-    | .lt => balanceL ky y (insert cmp k v l) r sorry sorry sorry
-    | .eq => .inner sz k v l r
-    | .gt => balanceR ky y l (insert cmp k v r) sorry sorry
+| inner sz ky y l r =>
+  match compare k ky with
+  | .lt => balanceL ky y (insert k v l) r sorry sorry sorry
+  | .eq => .inner sz k v l r
+  | .gt => balanceR ky y l (insert k v r) sorry sorry
 
-@[specialize] def get? (cmp : α → α → Ordering) (h : ∀ {k₁ k₂}, cmp k₁ k₂ = .eq → k₁ = k₂) (k : α) : Raw α β → Option (β k)
+@[specialize] def get? [Ord α] (h : ∀ {k₁ k₂ : α}, compare k₁ k₂ = .eq → k₁ = k₂) (k : α) : Raw α β → Option (β k)
 | leaf => none
 | inner _ ky y l r =>
-    match hc : cmp k ky with
-    | .lt => get? cmp h k l
-    | .gt => get? cmp h k r
-    | .eq => some (cast (congrArg β (h hc).symm) y)
+  match hc : compare k ky with
+  | .lt => get? h k l
+  | .gt => get? h k r
+  | .eq => some (cast (congrArg β (h hc).symm) y)
 
-@[specialize] def insertionPoint (cmp : α → α → Ordering) (k : α) (t : Raw α β) : Nat :=
+@[specialize] def insertionPoint [Ord α] (k : α) (t : Raw α β) : Nat :=
   go 0 t
 where
   @[specialize] go (sofar : Nat) : Raw α β → Nat
   | leaf => sofar
   | inner _ ky _ l r =>
-    match cmp k ky with
+    match compare k ky with
     | .lt => go sofar l
     | .eq => sofar + size l
     | .gt => go (sofar + 1 + size l) r
@@ -271,31 +305,57 @@ def depth : Raw α β → Nat
 
 def toList : Raw α β → List ((a : α) × β a)
 | leaf => []
-| inner _ k v l r => l.toList ++ [⟨k, v⟩] ++ r.toList
-/-
-theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) : (balanceR k v l r).toList = (Raw.inner 0 k v l r).toList := by
-  rw [balanceR]
-  split
-  · split
-    · simp only [toList]
-    · simp only [toList]
-    · simp only [toList]
-      ac_rfl
-    · simp [toList]
-      -- Here we need to know that the anonymously introduced subtrees are leaves
-      sorry
-    · split
-      · simp [toList]
-      · simp [toList]
-  · split
-    · simp [toList]
-    · split
-      · split
-        · split
-          · simp [toList]
-          · simp [toList]
-        · sorry
-      · simp [toList] -/
+| inner _ k v l r => l.toList ++ ⟨k, v⟩ :: r.toList
+
+@[simp]
+theorem toList_leaf : (Raw.leaf : Raw α β).toList = [] := rfl
+
+@[simp]
+theorem toList_inner {s k v l r} :
+    (Raw.inner s k v l r : Raw α β).toList = l.toList ++ ⟨k, v⟩ :: r.toList := rfl
+
+
+theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂) : (balanceR k v l r h₁ h₂).toList = (Raw.inner 0 k v l r).toList :=
+  sorry
+
+theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = (Raw.inner 0 k v l r).toList :=
+  sorry
+
+open Std.DHashMap.Internal.List
+
+@[simp]
+theorem keys_append {l l' : List ((a : α) × β a)} : keys (l ++ l') = keys l ++ keys l' := by
+  simp [keys_eq_map]
+
+theorem distinctKeys_append [BEq α] {l l' : List ((a : α) × β a)} : DistinctKeys (l ++ l') ↔
+    DistinctKeys l ∧ DistinctKeys l' ∧ ∀ a ∈ keys l, ∀ b ∈ keys l', (a == b) = false := by
+  refine ⟨fun ⟨h⟩ => ?_, fun ⟨⟨h₁⟩, ⟨h₂⟩, h₃⟩ => ⟨?_⟩⟩
+  · rw [keys_append, List.pairwise_append] at h
+    exact ⟨⟨h.1⟩, ⟨h.2.1⟩, h.2.2⟩
+  · rw [keys_append, List.pairwise_append]
+    exact ⟨h₁, h₂, h₃⟩
+
+attribute [local instance] beqOfOrd equivBEqOfTransOrd
+
+theorem mem_keys_toList {l : Raw α β} {k : α} : k ∈ keys l.toList ↔ k ∈ l := by
+  induction l <;> simp_all
+
+theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : DistinctKeys l.toList := by
+  induction h
+  · simp
+  · next s k v l r h₁ h₂ h₃ h₄ h₅ h₆ =>
+    rw [toList, distinctKeys_append, distinctKeys_cons_iff]
+    refine ⟨h₅, ⟨h₆, ?_⟩, ?_⟩
+    · rw [containsKey_eq_false_iff_forall_mem_keys]
+      simp only [mem_keys_toList]
+      intro k' hk'
+      exact beq_eq_false_of_lt (h₄ _ hk')
+    · simp only [mem_keys_toList, keys_cons, List.mem_cons, forall_eq_or_imp]
+      refine fun k' hk' => ⟨beq_eq_false_of_lt (h₃ _ hk'), fun k'' hk'' => ?_⟩
+      exact beq_eq_false_of_lt (lt_trans (h₃ _ hk') (h₄ _ hk''))
+
+theorem toList_insert [Ord α] {l : Raw α β} {k : α} {v : β k} :
+    List.Perm (toList (l.insert k v)) (insertEntry k v l.toList) := sorry
 
 end Raw
 
