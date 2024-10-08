@@ -319,19 +319,6 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
 
-theorem min_comm_of_containsKey_eq_false [TransOrd α] {p p' : (a : α) × β a}
-    {l : List ((a : α) × β a)} (h : p ∈ l) (h' : containsKey p'.1 l = false)
-    (hl : DistinctKeys l) : min p p' = min p' p := by
-  suffices p.1 < p'.1 ∨ p'.1 < p.1 by
-    rcases this with h|h
-    · simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
-    · simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
-  rcases lt_or_lt_or_beq p.1 p'.1 with h|h|hp
-  · exact Or.inl h
-  · exact Or.inr h
-  · rw [containsKey_congr (BEq.symm hp), containsKey_of_mem h] at h'
-    contradiction
-
 theorem min_comm_of_lt_or_lt [OrientedOrd α] {p p' : (a : α) × β a} (h : p.1 < p'.1 ∨ p'.1 < p.1) :
     min p p' = min p' p := by
   rcases h with h|h <;> simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
@@ -368,9 +355,7 @@ theorem lowerBound?_replaceEntry_cons_of_beq [TransOrd α] {l : List ((a : α) �
 theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] {l : List ((a : α) × β a)}
       {k : α} {v : β k} {a : α} (h : containsKey k l) (hl : DistinctKeys l) :
     lowerBound? (replaceEntry k v l) a = if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
-  -- have h' : containsKey k (replaceEntry k v l) := by simpa
   obtain ⟨l', hl'⟩ := perm_cons_getEntry h
-  -- have := replaceEntry_of_perm
   rw [lowerBound?_of_perm (replaceEntry_of_perm hl hl') hl.replaceEntry]
   rw [lowerBound?_replaceEntry_cons_of_beq (by simpa using getKey_beq _)]
   rw [lowerBound?_of_perm hl' hl, lowerBound?_cons]
