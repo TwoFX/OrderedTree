@@ -85,6 +85,28 @@ theorem mem_replaceEntry [BEq α] [PartialEquivBEq α] (xs : List ((a : α) × �
         · exact Or.inr h₂
         · exact Or.inl rfl
 
+@[simp]
+theorem getEntry_fst [BEq α] {xs : List ((a : α) × β a)} {k : α} (h : containsKey k xs) :
+    (getEntry k xs h).1 = getKey k xs h := by
+  induction xs using assoc_induction
+  · simp at h
+  · next k' v' l ih =>
+    cases hkk' : k' == k
+    · rw [getEntry_cons_of_false hkk', getKey_cons]
+      simp [hkk', ih]
+    · rw [getEntry_cons_of_beq hkk', getKey_cons]
+      simp [hkk']
+
+theorem getKey_beq [BEq α] {xs : List ((a : α) × β a)} {k : α} (h : containsKey k xs) :
+    getKey k xs h == k := by
+  induction xs using assoc_induction
+  · simp at h
+  · next k' v' l ih =>
+    rw [getKey_cons]
+    split
+    · assumption
+    · apply ih
+
 end Std.DHashMap.Internal.List
 
 variable [Ord α]
@@ -245,6 +267,10 @@ local instance : Min ((a : α) × β a) where
 
 theorem min_def' {p q : (a : α) × β a} : min p q = if p.1 ≤ q.1 then p else q := rfl
 
+theorem min_eq_or {p q : (a : α) × β a} : min p q = p ∨ min p q = q := by
+  rw [min_def']
+  split <;> simp
+
 -- Is this provable without `TransOrd`?
 local instance [TransOrd α] : Std.Associative (min : (a : α) × β a → (a : α) × β a → (a : α) × β a) where
   assoc a b c := by
@@ -264,6 +290,13 @@ namespace Std.DHashMap.Internal.List
 /-- The smallest element of `xs` that is not less than `k`. -/
 def lowerBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
   xs.filter (fun p => k ≤ p.1) |>.min?
+
+theorem lowerBound?_mem {xs : List ((a : α) × β a)} {k : α} {p : (a : α) × β a} (h : lowerBound? xs k = some p) :
+    p ∈ xs := by
+  rw [lowerBound?] at h
+  have := List.min?_mem (@min_eq_or _ _ _) h
+  simp at this
+  exact this.1
 
 /-- The smallest element of `xs` that is greater than `k`. -/
 def upperBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
@@ -286,14 +319,83 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
 
--- Plan: prove `lowerBound? xs k = some p ↔ p ∈ xs ∧ ∀ q ∈ xs, q.1 < k ∨ p.1 ≤ q.1` and then use `mem_replaceEntry` from above.
+theorem min_comm_of_containsKey_eq_false [TransOrd α] {p p' : (a : α) × β a}
+    {l : List ((a : α) × β a)} (h : p ∈ l) (h' : containsKey p'.1 l = false)
+    (hl : DistinctKeys l) : min p p' = min p' p := by
+  suffices p.1 < p'.1 ∨ p'.1 < p.1 by
+    rcases this with h|h
+    · simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
+    · simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
+  rcases lt_or_lt_or_beq p.1 p'.1 with h|h|hp
+  · exact Or.inl h
+  · exact Or.inr h
+  · rw [containsKey_congr (BEq.symm hp), containsKey_of_mem h] at h'
+    contradiction
 
-theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : containsKey k xs) :
-    lowerBound? (replaceEntry k v xs) a = if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min · ⟨k, v⟩)) := sorry
+theorem min_comm_of_lt_or_lt [OrientedOrd α] {p p' : (a : α) × β a} (h : p.1 < p'.1 ∨ p'.1 < p.1) :
+    min p p' = min p' p := by
+  rcases h with h|h <;> simp [min_def', le_of_lt h, not_le_iff_lt.2 h]
 
-theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
+theorem lt_or_lt_of_containsKey_eq_false [TransOrd α] {l : List ((a : α) × β a)} {p : (a : α) × β a} {k : α}
+    (hp : p ∈ l) (hk : containsKey k l = false) : p.1 < k ∨ k < p.1 := by
+  rcases lt_or_lt_or_beq p.1 k with h|h|h
+  · exact Or.inl h
+  · exact Or.inr h
+  · rw [containsKey_congr (BEq.symm h), containsKey_of_mem hp] at hk
+    contradiction
+
+theorem lowerBound?_of_perm [TransOrd α] {l l' : List ((a : α) × β a)} (hll' : List.Perm l l') {k : α} (hl : DistinctKeys l) :
+    lowerBound? l k = lowerBound? l' k := by
+  induction hll' with
+  | nil => rfl
+  | @cons x l l' _ ih => rw [lowerBound?_cons, lowerBound?_cons, ih hl.tail]
+  | swap x y l =>
+    rw [lowerBound?_cons, lowerBound?_cons, lowerBound?_cons, lowerBound?_cons]
+    split <;> split <;> try (simp; done)
+    rename_i hyk hxk
+    have hxy : x.1 < y.1 ∨ y.1 < x.1 :=
+      lt_or_lt_of_containsKey_eq_false (List.mem_cons_self _ _) hl.containsKey_eq_false
+    cases lowerBound? l k with
+    | none => simpa using (min_comm_of_lt_or_lt hxy).symm
+    | some p => simp [← Std.Associative.assoc (op := min), min_comm_of_lt_or_lt hxy]
+  | trans h₁ _ ih₁ ih₂ => rw [ih₁ hl, ih₂ (hl.perm h₁.symm)]
+
+theorem lowerBound?_replaceEntry_cons_of_beq [TransOrd α] {l : List ((a : α) × β a)}
+    {k a : α} {v : β k} {p : (a : α) × β a} (h : p.1 == k) : lowerBound? (replaceEntry k v (p :: l)) a =
+      if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+  rw [replaceEntry_cons_of_true h, lowerBound?_cons]
+
+theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] {l : List ((a : α) × β a)}
+      {k : α} {v : β k} {a : α} (h : containsKey k l) (hl : DistinctKeys l) :
+    lowerBound? (replaceEntry k v l) a = if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+  -- have h' : containsKey k (replaceEntry k v l) := by simpa
+  obtain ⟨l', hl'⟩ := perm_cons_getEntry h
+  -- have := replaceEntry_of_perm
+  rw [lowerBound?_of_perm (replaceEntry_of_perm hl hl') hl.replaceEntry]
+  rw [lowerBound?_replaceEntry_cons_of_beq (by simpa using getKey_beq _)]
+  rw [lowerBound?_of_perm hl' hl, lowerBound?_cons]
+  split <;> split
+  · rfl
+  · rename_i h₁ h₂
+    simp only [getEntry_fst] at h₂
+    have h₁' := lt_of_beq_of_lt (getKey_beq h) h₁
+    contradiction
+  · simp
+  · have hk : k ≤ getKey k l h := le_of_beq (BEq.symm (getKey_beq h))
+    cases lowerBound? l' a with
+    | none => simp [min_def', hk]
+    | some p =>
+      simp only [Option.elim_some, Option.some.injEq]
+      rw [← Std.Associative.assoc (op := min)]
+      congr 1
+      simp [min_def', hk]
+
+theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : DistinctKeys xs) :
     lowerBound? (insertEntry k v xs) a =
-      if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min · ⟨k, v⟩)) := by
-  sorry
+      if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+  rw [insertEntry]
+  cases hc : containsKey k xs
+  · rw [cond_false, lowerBound?_cons]
+  · rw [cond_true, lowerBound?_replaceEntry_of_containsKey_eq_true hc h]
 
 end Std.DHashMap.Internal.List
