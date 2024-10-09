@@ -124,6 +124,10 @@ theorem compare_self [OrientedOrd α] {a : α} : compare a a = .eq := by
   apply Ordering.eq_eq_of_eq_swap
   exact OrientedOrd.eq_swap
 
+theorem compare_eq_gt_iff [OrientedOrd α] {a b : α} : compare a b = .gt ↔ compare b a = .lt := by
+  rw [OrientedOrd.eq_swap]
+  cases compare b a <;> simp
+
 theorem beq_refl [OrientedOrd α] {a : α} : a == a := by
   simp [beq_iff]
 
@@ -147,6 +151,9 @@ theorem not_le_iff_lt [OrientedOrd α] {a b : α} : ¬a ≤ b ↔ b < a := by
 
 theorem not_lt_iff_le [OrientedOrd α] {a b : α} : ¬a < b ↔ b ≤ a :=
   Decidable.not_iff_comm.1 not_le_iff_lt
+
+theorem lt_iff' [OrientedOrd α] {a b : α} : a < b ↔ compare b a = .gt := by
+  rw [lt_iff, compare_eq_gt_iff]
 
 /-- Class for transitive ordering functions. -/
 class TransOrd (α : Type u) [Ord α] extends OrientedOrd α where

@@ -62,6 +62,20 @@ inductive Ordered [Ord α] : Raw α β → Prop where
   | inner {s k v l r} : Ordered l → Ordered r →
       (∀ k' ∈ l, compare k' k = .lt) → (∀ k' ∈ r, compare k k' = .lt) → Ordered (Raw.inner s k v l r)
 
+attribute [simp] Ordered.leaf
+
+theorem Ordered.left [Ord α] {s k v l r} : (Raw.inner s k v l r : Raw α β).Ordered → l.Ordered
+| inner h _ _ _ => h
+
+theorem Ordered.right [Ord α] {s k v l r} : (Raw.inner s k v l r : Raw α β).Ordered → r.Ordered
+| inner _ h _ _ => h
+
+theorem Ordered.compare_left [Ord α] {s k v l r k'} : (Raw.inner s k v l r : Raw α β).Ordered → k' ∈ l → compare k' k = .lt
+| inner _ _ h _, h' => h _ h'
+
+theorem Ordered.compare_right [Ord α] {s k v l r k'} : (Raw.inner s k v l r : Raw α β).Ordered → k' ∈ r → compare k k' = .lt
+| inner _ _ _ h, h' => h _ h'
+
 @[simp] theorem size_leaf : (leaf : Raw α β).size = 0 := rfl
 
 def BalancedAtRoot (left right : Nat) : Prop :=
@@ -280,6 +294,33 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   | .eq => .inner sz k v l r
   | .gt => balanceR ky y l (insert k v r) sorry sorry
 
+def insertWithoutRebalancing [Ord α] (k : α) (v : β k) : Raw α β → Raw α β
+| leaf => .inner 1 k v .leaf .leaf
+| inner sz ky y l r =>
+  match compare k ky with
+  | .lt => .inner (sz + 1) ky y (insertWithoutRebalancing k v l) r
+  | .eq => .inner sz k v l r
+  | .gt => .inner (sz + 1) ky y l (insertWithoutRebalancing k v r)
+
+def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : Raw α β → Raw α β
+| leaf => match f none with
+          | none => .leaf
+          | some ⟨k', v'⟩ => .inner 1 k' v' .leaf .leaf
+| inner sz ky y l r =>
+  match compare k ky with
+  | .lt =>
+      let newL := updateAtKey k f l
+      .inner (1 + newL.size + r.size) ky y newL r
+  | .eq => match f (some ⟨ky, y⟩) with
+           | none => sorry -- delete
+           | some ⟨ky', y'⟩ => .inner sz ky' y' l r
+  | .gt =>
+      let newR := updateAtKey k f r
+      .inner (1 + l.size + newR.size) ky y l newR
+
+def insertₘ [Ord α] (k : α) (v : β k) : Raw α β → Raw α β :=
+  updateAtKey k (fun _ => some ⟨k, v⟩)
+
 @[specialize] def get? [Ord α] (h : ∀ {k₁ k₂ : α}, compare k₁ k₂ = .eq → k₁ = k₂) (k : α) : Raw α β → Option (β k)
 | leaf => none
 | inner _ ky y l r =>
@@ -287,6 +328,14 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   | .lt => get? h k l
   | .gt => get? h k r
   | .eq => some (cast (congrArg β (h hc).symm) y)
+
+def getEntry? [Ord α] (k : α) : Raw α β → Option ((a : α) × β a)
+| leaf => none
+| inner _ ky y l r =>
+  match compare k ky with
+  | .lt => getEntry? k l
+  | .gt => getEntry? k r
+  | .eq => some ⟨ky, y⟩
 
 @[specialize] def insertionPoint [Ord α] (k : α) (t : Raw α β) : Nat :=
   go 0 t
@@ -315,11 +364,26 @@ theorem toList_inner {s k v l r} :
     (Raw.inner s k v l r : Raw α β).toList = l.toList ++ ⟨k, v⟩ :: r.toList := rfl
 
 
+
 theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂) : (balanceR k v l r h₁ h₂).toList = (Raw.inner 0 k v l r).toList :=
   sorry
 
 theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = (Raw.inner 0 k v l r).toList :=
   sorry
+
+theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : Raw α β} {k : α} {v : β k} :
+    (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList := by
+  apply Raw.insert.induct k v (motive := fun l => (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList)
+  · simp [insert, insertWithoutRebalancing]
+  all_goals
+    intros
+    simp_all [insert, insertWithoutRebalancing, toList_balanceL, toList_balanceR]
+
+theorem toList_insertWithoutRebalancing_eq_toList_insertₘ [Ord α] {l : Raw α β} {k : α} {v : β k} :
+    (l.insertWithoutRebalancing k v).toList = (l.insertₘ k v).toList := by
+  induction l using Raw.insertWithoutRebalancing.induct k v
+    <;> simp_all [insertWithoutRebalancing, insertₘ, updateAtKey]
+
 
 open Std.DHashMap.Internal.List
 
@@ -340,6 +404,15 @@ attribute [local instance] beqOfOrd equivBEqOfTransOrd
 theorem mem_keys_toList {l : Raw α β} {k : α} : k ∈ keys l.toList ↔ k ∈ l := by
   induction l <;> simp_all
 
+theorem beq_of_mem_getEntry [Ord α] [TransOrd α] {l : Raw α β} {k : α} {p} : p ∈ l.getEntry? k → k == p.1 := by
+  induction l using Raw.getEntry?.induct k
+  · simp [getEntry?]
+  · simp_all [getEntry?]
+  · simp_all [getEntry?]
+  · simp_all [getEntry?]
+    rintro rfl
+    exact beq_iff.2 (by simpa)
+
 theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : DistinctKeys l.toList := by
   induction h
   · simp
@@ -354,8 +427,102 @@ theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Order
       refine fun k' hk' => ⟨beq_eq_false_of_lt (h₃ _ hk'), fun k'' hk'' => ?_⟩
       exact beq_eq_false_of_lt (lt_trans (h₃ _ hk') (h₄ _ hk''))
 
-theorem toList_insert [Ord α] {l : Raw α β} {k : α} {v : β k} :
-    List.Perm (toList (l.insert k v)) (insertEntry k v l.toList) := sorry
+theorem perm_rotate {l l' : List α} {x : α} : (l ++ x :: l').Perm (l' ++ x :: l) := by
+  -- Surely there is a tactic that can solve this?!
+  rw [← List.singleton_append]
+  refine List.perm_append_comm.trans ?_
+  refine (List.perm_append_right_iff _).2 List.perm_append_comm |>.trans ?_
+  rw [List.append_assoc, List.singleton_append]
+
+theorem Ordered.containsKey_left [Ord α] [TransOrd α] {s ky y l r}
+    (h : (Raw.inner s ky y l r : Raw α β).Ordered) : containsKey ky l.toList = false := by
+  have h := h.distinctKeys
+  rw [toList_inner] at h
+  exact (distinctKeys_of_sublist (List.sublist_append_right _ _) (h.perm perm_rotate)).containsKey_eq_false
+
+theorem Ordered.containsKey_right [Ord α] [TransOrd α] {s ky y l r}
+    (h : (Raw.inner s ky y l r : Raw α β).Ordered) : containsKey ky r.toList = false := by
+  have h := h.distinctKeys
+  rw [toList_inner] at h
+  exact (distinctKeys_of_sublist (List.sublist_append_right _ _) h).containsKey_eq_false
+
+theorem Ordered.containsKey_right_of_isLE [Ord α] [TransOrd α] {k : α} {s ky y l r} (h₁ : compare k ky |>.isLE)
+    (h : (Raw.inner s ky y l r : Raw α β).Ordered) : containsKey k r.toList = false := by
+  simp only [containsKey_eq_false_iff_forall_mem_keys, mem_keys_toList]
+  exact fun a ha => beq_eq_false_of_lt (lt_of_le_of_lt h₁ <| h.compare_right ha)
+
+theorem Ordered.containsKey_left_of_isLE [Ord α] [TransOrd α] {k : α} {s ky y l r} (h₁ : compare ky k |>.isLE)
+    (h : (Raw.inner s ky y l r : Raw α β).Ordered) : containsKey k l.toList = false := by
+  simp only [containsKey_eq_false_iff_forall_mem_keys, mem_keys_toList]
+  exact fun a ha => BEq.symm_false <| beq_eq_false_of_lt (lt_of_lt_of_le (h.compare_left ha) h₁)
+
+theorem exists_cell_of_update [Ord α] (l : Raw α β) (k : α)
+    (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : ∃ (l' : List ((a : α) × β a)),
+    l.toList.Perm ((l.getEntry? k).toList ++ l') ∧
+    (l.updateAtKey k f).toList.Perm ((f (l.getEntry? k)).toList ++ l') ∧
+    (∀ [TransOrd α], l.Ordered → containsKey k l' = false) := by
+  induction l using updateAtKey.induct k f
+  · simp_all [getEntry?, updateAtKey]
+  · simp_all [getEntry?, updateAtKey]
+  · rename_i sz ky y l r hcmp ih
+    rcases ih with ⟨l', hl'₁, hl'₂, hl'₃⟩
+    simp only [toList_inner, getEntry?, hcmp, updateAtKey]
+    refine ⟨l' ++ ⟨ky, y⟩ :: r.toList, ?_, ?_, ?_⟩
+    · simpa only [← List.append_assoc, List.perm_append_right_iff]
+    · simpa only [← List.append_assoc, List.perm_append_right_iff]
+    · intro _ hO
+      simp only [containsKey_append, containsKey_cons, Bool.or_eq_false_iff]
+      refine ⟨hl'₃ hO.left, BEq.symm_false (beq_eq_false_of_lt hcmp), ?_⟩
+      apply hO.containsKey_right_of_isLE
+      exact Ordering.isLE_of_eq_lt hcmp
+  · sorry -- delete case
+  · rename_i sz ky y l r hcmp k' v' hf
+    simp [getEntry?, hcmp, updateAtKey, hf]
+    refine ⟨l.toList ++ r.toList, by simp, by simp, ?_⟩
+    intro _ hO
+    simp only [containsKey_append, Bool.or_eq_false_iff]
+    refine ⟨?_, ?_⟩
+    · apply hO.containsKey_left_of_isLE
+      exact le_of_beq (BEq.symm (beq_iff.2 hcmp))
+    · apply hO.containsKey_right_of_isLE
+      exact le_of_beq (beq_iff.2 hcmp)
+  · rename_i sz ky y l r hcmp ih
+    rcases ih with ⟨l', hl'₁, hl'₂, hl'₃⟩
+    simp only [toList_inner, getEntry?, hcmp, updateAtKey]
+    refine ⟨l' ++ ⟨ky, y⟩ :: l.toList, ?_, ?_, ?_⟩
+    · simp only [← List.append_assoc]
+      exact perm_rotate.trans ((List.perm_append_right_iff _).2 hl'₁)
+    · simp only [← List.append_assoc]
+      exact perm_rotate.trans ((List.perm_append_right_iff _).2 hl'₂)
+    · intro _ hO
+      simp only [containsKey_append, containsKey_cons, Bool.or_eq_false_iff]
+      refine ⟨hl'₃ hO.right, beq_eq_false_of_lt (lt_iff'.2 hcmp), ?_⟩
+      apply hO.containsKey_left_of_isLE
+      exact Ordering.isLE_of_eq_lt (by rwa [compare_eq_gt_iff] at hcmp)
+
+theorem exists_cell [Ord α] (l : Raw α β) (k : α) : ∃ (l' : List ((a : α) × β a)),
+    l.toList.Perm ((l.getEntry? k).toList ++ l') ∧
+    (∀ [TransOrd α], l.Ordered → containsKey k l' = false) := by
+  obtain ⟨l', h₁, -, h₂⟩ := exists_cell_of_update l k id
+  exact ⟨l', h₁, h₂⟩
+
+theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k) (h : l.Ordered) :
+    List.Perm (toList (l.insert k v)) (insertEntry k v l.toList) := by
+  rw [toList_insert_eq_toList_insertWithoutRebalancing,
+      toList_insertWithoutRebalancing_eq_toList_insertₘ]
+
+  have hfg : ∀ (l : Option ((a : α) × β a)), (∀ p ∈ l, p.1 == k) → (some ⟨k, v⟩).toList = insertEntry k v l.toList := by
+    rintro (_|p)
+    · simp
+    · intro h'
+      simp only [Option.toList_some]
+      rw [insertEntry_of_containsKey (containsKey_cons_of_beq (h' p rfl)), replaceEntry_cons_of_true (h' p rfl)]
+
+  obtain ⟨l', h₁, h₂, h₃⟩ := exists_cell_of_update l k (fun _ => some ⟨k, v⟩)
+  refine h₂.trans (List.Perm.trans ?_ (insertEntry_of_perm h.distinctKeys h₁).symm)
+  rw [insertEntry_append_of_not_contains_right (h₃ h), hfg]
+  intro p hp
+  exact BEq.symm (beq_of_mem_getEntry hp)
 
 end Raw
 
