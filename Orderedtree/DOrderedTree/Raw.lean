@@ -76,6 +76,10 @@ theorem Ordered.compare_left [Ord α] {s k v l r k'} : (Raw.inner s k v l r : Ra
 theorem Ordered.compare_right [Ord α] {s k v l r k'} : (Raw.inner s k v l r : Raw α β).Ordered → k' ∈ r → compare k k' = .lt
 | inner _ _ _ h, h' => h _ h'
 
+@[simp]
+theorem ordered_inner_leaf_leaf [Ord α] {s k v} : (Raw.inner s k v .leaf .leaf : Raw α β).Ordered := by
+  apply Ordered.inner <;> simp
+
 @[simp] theorem size_leaf : (leaf : Raw α β).size = 0 := rfl
 
 def BalancedAtRoot (left right : Nat) : Prop :=
@@ -500,6 +504,72 @@ theorem exists_cell_of_update [Ord α] (l : Raw α β) (k : α)
       apply hO.containsKey_left_of_isLE
       exact Ordering.isLE_of_eq_lt (by rwa [compare_eq_gt_iff] at hcmp)
 
+theorem mem_updateAtKey [Ord α] [TransOrd α] {l : Raw α β} {k k₀ : α} {f}
+    (hf : ∀ (l : Option ((a : α) × β a)), (∀ p ∈ l, p.1 == k) → ∀ p ∈ f l, p.1 == k) :
+    k₀ ∈ l.updateAtKey k f → k₀ ∈ l ∨ k₀ == k := by
+  induction l using Raw.updateAtKey.induct k f
+  · simp_all [Raw.updateAtKey]
+  · rename_i k' v' hfn
+    simp only [updateAtKey, hfn, mem_inner_iff, not_mem_leaf, or_false, false_or]
+    rintro rfl
+    exact hf none (by simp) ⟨k₀, v'⟩ (by simp [hfn])
+  · rename_i sz ky y l r hcmp ih
+    simp only [updateAtKey, hcmp, mem_inner_iff]
+    rintro (h|rfl|h)
+    · exact (ih h).elim (Or.inl ∘ Or.inl) Or.inr
+    · simp
+    · simp_all
+  · -- erase case
+    sorry
+  · rename_i sz ky y l r hcmp k' v' hfs
+    simp only [updateAtKey, hcmp, hfs, mem_inner_iff]
+    rintro (h|rfl|h)
+    · simp_all
+    · exact Or.inr <| hf (some ⟨ky, y⟩) (by simpa using BEq.symm (beq_iff.2 hcmp)) ⟨k₀, v'⟩ (by simp [hfs])
+    · simp_all
+  · rename_i sz ky y l r hcmp ih
+    simp only [updateAtKey, hcmp, mem_inner_iff]
+    rintro (h|rfl|h)
+    · simp_all
+    · simp
+    · exact (ih h).elim (Or.inl ∘ Or.inr ∘ Or.inr) Or.inr
+
+theorem Ordered.updateAtKey [Ord α] [TransOrd α] {l : Raw α β} {k : α}
+    {f : Option ((a : α) × β a) → Option ((a : α) × β a)}
+    (hf : ∀ (l : Option ((a : α) × β a)), (∀ p ∈ l, p.1 == k) → ∀ p ∈ f l, p.1 == k)
+    (hO : l.Ordered) : (l.updateAtKey k f).Ordered := by
+  induction l using Raw.updateAtKey.induct k f
+  · simp_all [Raw.updateAtKey]
+  · simp_all [Raw.updateAtKey]
+  · rename_i sz ky y l r hcmp ih
+    simp only [Raw.updateAtKey, hcmp]
+    refine Ordered.inner (ih hO.left) hO.right ?_ ?_
+    · intro k' hk'
+      rcases mem_updateAtKey hf hk' with (hk'|hk')
+      · exact hO.compare_left hk'
+      · exact lt_of_beq_of_lt hk' hcmp
+    · exact fun k' hk' => hO.compare_right hk'
+  · sorry -- erase case
+  · rename_i sz ky y l r hcmp k' v' hfs
+    simp only [Raw.updateAtKey, hcmp, hfs]
+    refine Ordered.inner hO.left hO.right ?_ ?_
+    · intro k₁ hk₁
+      have hc₁ := hO.compare_left hk₁
+      have hc₂ := hf (some ⟨ky, y⟩) (by simpa using BEq.symm (beq_iff.2 hcmp)) ⟨k', v'⟩ (by simp [hfs])
+      exact lt_of_lt_of_beq hc₁ (BEq.trans (BEq.symm (beq_iff.2 hcmp)) (BEq.symm hc₂))
+    · intro k₁ hk₁
+      have hc₁ := hO.compare_right hk₁
+      have hc₂ := hf (some ⟨ky, y⟩) (by simpa using BEq.symm (beq_iff.2 hcmp)) ⟨k', v'⟩ (by simp [hfs])
+      exact lt_of_beq_of_lt (BEq.trans hc₂ (beq_iff.2 hcmp)) hc₁
+  · rename_i sz ky y l r hcmp ih
+    simp only [Raw.updateAtKey, hcmp]
+    refine Ordered.inner hO.left (ih hO.right) ?_ ?_
+    · exact fun k' hk' => hO.compare_left hk'
+    · intro k' hk'
+      rcases mem_updateAtKey hf hk' with (hk'|hk')
+      · exact hO.compare_right hk'
+      · exact lt_of_lt_of_beq (compare_eq_gt_iff.1 hcmp) (BEq.symm hk')
+
 theorem exists_cell [Ord α] (l : Raw α β) (k : α) : ∃ (l' : List ((a : α) × β a)),
     l.toList.Perm ((l.getEntry? k).toList ++ l') ∧
     (∀ [TransOrd α], l.Ordered → containsKey k l' = false) := by
@@ -521,8 +591,7 @@ theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k)
   obtain ⟨l', h₁, h₂, h₃⟩ := exists_cell_of_update l k (fun _ => some ⟨k, v⟩)
   refine h₂.trans (List.Perm.trans ?_ (insertEntry_of_perm h.distinctKeys h₁).symm)
   rw [insertEntry_append_of_not_contains_right (h₃ h), hfg]
-  intro p hp
-  exact BEq.symm (beq_of_mem_getEntry hp)
+  exact fun p hp => BEq.symm (beq_of_mem_getEntry hp)
 
 end Raw
 
