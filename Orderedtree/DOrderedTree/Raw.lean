@@ -755,8 +755,11 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
     | none =>
       simp only [Option.none_or, Option.toList_none, List.nil_append]
       rw [lowerBound?_append_of_forall_mem_left]
+      sorry
+      sorry
     | some p =>
         simp
+        sorry
 
 
   sorry
