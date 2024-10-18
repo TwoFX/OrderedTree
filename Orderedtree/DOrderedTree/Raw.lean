@@ -5,7 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.List.Associative
 
-universe u v
+universe u v w
 
 -- This closely follows the Haskell implementation at https://hackage.haskell.org/package/containers-0.7/docs/src/Data.Map.Internal.html
 
@@ -325,6 +325,69 @@ def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a 
 def insertₘ [Ord α] (k : α) (v : β k) : Raw α β → Raw α β :=
   updateAtKey k (fun _ => some ⟨k, v⟩)
 
+variable (α β) in
+inductive ExplorationStep where
+  /-- Needle was less than key at this node: return key-value pair and unexplored right subtree,
+      recusion will continue in left subtree. -/
+  | lt : (a : α) → β a → Raw α β → ExplorationStep
+  /-- Needle was equal to key at this node: return key-value pair and both unexplored subtrees,
+      recursion will terminate. -/
+  | eq : Raw α β → (a : α) → β a → Raw α β → ExplorationStep
+  /-- Needle was larger than key at this node: return key-value pair and unexplored left subtree,
+      recusion will containue in right subtree. -/
+  | gt : Raw α β → (a : α) → β a → ExplorationStep
+
+def explore₂ {γ : Type w} [Ord α] (k : α) (init : γ)
+    (inner : γ → ExplorationStep α β → γ) : Raw α β → γ
+| .leaf => init
+| .inner _ ky y l r => match compare k ky with
+    | .lt => explore₂ k (inner init <| .lt ky y r) inner l
+    | .eq => inner init <| .eq l ky y r
+    | .gt => explore₂ k (inner init <| .gt l ky y) inner r
+
+/-- The smallest element of `l` that is not less than `k`. -/
+def lowerBound?ₘ₂ [Ord α] (k : α) (l : Raw α β) : Option ((a : α) × β a) :=
+  explore₂ k none (fun sofar step =>
+    match step with
+    | .lt ky y _ => some ⟨ky, y⟩
+    | .eq _ ky y _ => some ⟨ky, y⟩
+    | .gt _ _ _ => sofar) l
+
+def explore {γ : Type w} [Ord α] (k : α) (init : γ)
+    (inner : Nat → Raw α β → (a : α) → β a → Raw α β → γ → γ) : Raw α β → γ
+| .leaf => init
+| .inner sz ky y l r => match compare k ky with
+    | .lt => explore k (inner sz l ky y r init) inner l
+    | .eq => inner sz l ky y r init
+    | .gt => explore k (inner sz l ky y r init) inner r
+
+/-- The smallest element of `l` that is not less than `k`. -/
+def lowerBound? [Ord α] (k : α) : Raw α β → Option ((a : α) × β a) :=
+  go none
+where
+  go (best : Option ((a : α) × β a)) : Raw α β → Option ((a : α) × β a)
+  | .leaf => best
+  | .inner _ ky y l r => match compare k ky with
+    | .lt => go (some ⟨ky, y⟩) l
+    | .eq => some ⟨ky, y⟩
+    | .gt => go best r
+
+def lowerBound?ₘ [Ord α] (k : α) (l : Raw α β) : Option ((a : α) × β a) :=
+  l.explore k none (fun _ _ ky y _ init => match compare k ky with | .gt => init | _ => some ⟨ky, y⟩)
+
+theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Raw α β} : l.lowerBound? k = l.lowerBound?ₘ k := by
+  rw [lowerBound?, lowerBound?ₘ]
+  suffices ∀ o, lowerBound?.go k o l = explore k o _ l from this none
+  intro o
+  induction l generalizing o with
+  | leaf => simp [explore, lowerBound?.go]
+  | inner s ky y l r ih₁ ih₂ =>
+    rw [lowerBound?.go, explore]
+    cases compare k ky with
+    | lt => rw [ih₁]
+    | eq => simp
+    | gt => rw [ih₂]
+
 @[specialize] def get? [Ord α] (h : ∀ {k₁ k₂ : α}, compare k₁ k₂ = .eq → k₁ = k₂) (k : α) : Raw α β → Option (β k)
 | leaf => none
 | inner _ ky y l r =>
@@ -341,6 +404,7 @@ def getEntry? [Ord α] (k : α) : Raw α β → Option ((a : α) × β a)
   | .gt => getEntry? k r
   | .eq => some ⟨ky, y⟩
 
+/-- Counts the number of elements that are strictly less than `k` -/
 @[specialize] def insertionPoint [Ord α] (k : α) (t : Raw α β) : Nat :=
   go 0 t
 where
@@ -351,6 +415,23 @@ where
     | .lt => go sofar l
     | .eq => sofar + size l
     | .gt => go (sofar + 1 + size l) r
+
+def insertionPointₘ [Ord α] (k : α) (l : Raw α β) : Nat :=
+  explore k 0 (fun _ l ky _ _ init => init + match compare k ky with | .lt => 0 | .eq => size l | .gt => 1 + size l) l
+
+theorem insertionPoint_eq_insertionPointₘ [Ord α] {k : α} {l : Raw α β} :
+    l.insertionPoint k = l.insertionPointₘ k := by
+  rw [insertionPoint, insertionPointₘ]
+  suffices ∀ n, insertionPoint.go k n l = explore k n _ l from this 0
+  intro n
+  induction l generalizing n with
+  | leaf => simp [insertionPoint.go, explore]
+  | inner s ky y l r ih₁ ih₂ =>
+    simp only [insertionPoint.go, explore]
+    cases compare k ky with
+    | lt => simpa using ih₁ _
+    | eq => simp
+    | gt => simpa [Nat.add_assoc] using ih₂ _
 
 def depth : Raw α β → Nat
 | leaf => 0
@@ -417,19 +498,19 @@ theorem beq_of_mem_getEntry [Ord α] [TransOrd α] {l : Raw α β} {k : α} {p} 
     rintro rfl
     exact beq_iff.2 (by simpa)
 
-theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : DistinctKeys l.toList := by
+attribute [local instance] ltOfOrd
+
+theorem Ordered.pairwise [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : keys (l.toList) |>.Pairwise (· < ·) := by
   induction h
   · simp
   · next s k v l r h₁ h₂ h₃ h₄ h₅ h₆ =>
-    rw [toList, distinctKeys_append, distinctKeys_cons_iff]
-    refine ⟨h₅, ⟨h₆, ?_⟩, ?_⟩
-    · rw [containsKey_eq_false_iff_forall_mem_keys]
-      simp only [mem_keys_toList]
-      intro k' hk'
-      exact beq_eq_false_of_lt (h₄ _ hk')
-    · simp only [mem_keys_toList, keys_cons, List.mem_cons, forall_eq_or_imp]
-      refine fun k' hk' => ⟨beq_eq_false_of_lt (h₃ _ hk'), fun k'' hk'' => ?_⟩
-      exact beq_eq_false_of_lt (lt_trans (h₃ _ hk') (h₄ _ hk''))
+    simp only [toList, keys_append, keys_cons, List.pairwise_append, List.pairwise_cons,
+      List.mem_cons, forall_eq_or_imp]
+    refine ⟨h₅, ⟨by simpa [mem_keys_toList], h₆⟩, fun a ha => ⟨h₃ a (mem_keys_toList.1 ha), fun b hb => ?_⟩⟩
+    exact lt_trans (h₃ a (mem_keys_toList.1 ha)) (h₄ b (mem_keys_toList.1 hb))
+
+theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : DistinctKeys l.toList :=
+  ⟨h.pairwise.imp beq_eq_false_of_lt⟩
 
 theorem perm_rotate {l l' : List α} {x : α} : (l ++ x :: l').Perm (l' ++ x :: l) := by
   -- Surely there is a tactic that can solve this?!
@@ -459,6 +540,29 @@ theorem Ordered.containsKey_left_of_isLE [Ord α] [TransOrd α] {k : α} {s ky y
     (h : (Raw.inner s ky y l r : Raw α β).Ordered) : containsKey k l.toList = false := by
   simp only [containsKey_eq_false_iff_forall_mem_keys, mem_keys_toList]
   exact fun a ha => BEq.symm_false <| beq_eq_false_of_lt (lt_of_lt_of_le (h.compare_left ha) h₁)
+
+-- theorem head_toList? [Ord α] [TransOrd α] (l : Raw α β) (k : α)
+
+theorem mem_keys_of_mem {l : List ((a : α) × β a)} {p : (a : α) × β a} (h : p ∈ l) : p.1 ∈ keys l := by
+  rw [keys_eq_map, List.mem_map]
+  exact ⟨_, ⟨h, rfl⟩⟩
+
+theorem Ordered.isLE_compare_head? [Ord α] [TransOrd α] (l : Raw α β) (k : α) (hk : k ∈ l) (hO : l.Ordered) :
+    ∀ p ∈ l.toList.head?, compare p.1 k |>.isLE := by
+  induction l with
+  | leaf => simp
+  | inner _ ky y l r ih₁ _ =>
+    rintro p hp
+    simp only [toList_inner, List.head?_append, List.head?_cons, Option.mem_def, Option.or_eq_some,
+      List.head?_eq_none_iff, Option.some.injEq] at hp
+    simp only [mem_inner_iff] at hk
+    rcases hp with (hp|⟨hp, rfl⟩) <;> rcases hk with (hk|rfl|hk)
+    · exact ih₁ hk hO.left _ hp
+    · exact Ordering.isLE_of_eq_lt (hO.compare_left (mem_keys_toList.1 (mem_keys_of_mem (List.mem_of_mem_head? hp))))
+    · exact Ordering.isLE_of_eq_lt (lt_trans (hO.compare_left (mem_keys_toList.1 (mem_keys_of_mem (List.mem_of_mem_head? hp)))) (hO.compare_right hk))
+    · simp [← mem_keys_toList, hp] at hk
+    · exact Ordering.isLE_of_eq_eq (beq_iff.1 BEq.refl)
+    · exact Ordering.isLE_of_eq_lt (hO.compare_right hk)
 
 theorem exists_cell_of_update [Ord α] (l : Raw α β) (k : α)
     (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : ∃ (l' : List ((a : α) × β a)),
@@ -570,6 +674,10 @@ theorem Ordered.updateAtKey [Ord α] [TransOrd α] {l : Raw α β} {k : α}
       · exact hO.compare_right hk'
       · exact lt_of_lt_of_beq (compare_eq_gt_iff.1 hcmp) (BEq.symm hk')
 
+theorem Ordered.insert [Ord α] [TransOrd α] {l : Raw α β} {k : α} {v : β k} :
+    l.Ordered → (l.insert k v).Ordered := by
+  sorry
+
 theorem exists_cell [Ord α] (l : Raw α β) (k : α) : ∃ (l' : List ((a : α) × β a)),
     l.toList.Perm ((l.getEntry? k).toList ++ l') ∧
     (∀ [TransOrd α], l.Ordered → containsKey k l' = false) := by
@@ -592,6 +700,66 @@ theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k)
   refine h₂.trans (List.Perm.trans ?_ (insertEntry_of_perm h.distinctKeys h₁).symm)
   rw [insertEntry_append_of_not_contains_right (h₃ h), hfg]
   exact fun p hp => BEq.symm (beq_of_mem_getEntry hp)
+
+theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} {k : α} {init : γ}
+    (f : γ → ExplorationStep α β → γ)
+    (g : List ((a : α) × β a) → Option ((a : α) × β a) → List ((a : α) × β a) → γ)
+    (h : List ((a : α) × β a) → γ)
+
+    (hfg₁ : ∀ l₁ l₂ ky y r, f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂))
+    (hfg₂ : ∀ l₁ l₂ l ky y r, f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂))
+    (hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂)
+
+    (hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
+      (∀ p ∈ o, compare p.1 k = .eq) →
+      (∀ p ∈ l₂, compare k p.1 = .lt) →
+      g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂))
+
+    (hh₁ : h [] = init)
+
+    :
+    explore₂ k init f l = h (l.toList) := by
+  induction init, f, l using explore₂.induct k
+  · simp [explore₂, hh₁]
+  · sorry
+  · sorry
+  · sorry
+
+
+theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
+    l.lowerBound?ₘ₂ k = Std.DHashMap.Internal.List.lowerBound? l.toList k := by
+  rw [lowerBound?ₘ₂]
+  let f : Option ((a : α) × β a) → ExplorationStep α β → Option ((a : α) × β a) := fun sofar step =>
+    match step with
+    | .lt ky y _ => some ⟨ky, y⟩
+    | .eq _ ky y _ => some ⟨ky, y⟩
+    | .gt _ _ _ => sofar
+  let g : List ((a : α) × β a) → Option ((a : α) × β a) → List ((a : α) × β a) → Option ((a : α) × β a) :=
+    fun _ o l₂ => o.or l₂.head?
+  let h : List ((a : α) × β a) → Option ((a : α) × β a) := (Std.DHashMap.Internal.List.lowerBound? · k)
+
+  have hfg₁ : ∀ l₁ l₂ ky y r, f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂) := by
+    simp [f, g]
+  have hfg₂ : ∀ l₁ l₂ l ky y r, f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂) := by
+    simp [f, g]
+  have hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂ := by
+    simp [f, g]
+
+  have hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
+      (∀ p ∈ o, compare p.1 k = .eq) →
+      (∀ p ∈ l₂, compare k p.1 = .lt) →
+      g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂) := by
+    intro l₁ o l₂ hl₁ ho hl₂
+    simp only [List.append_assoc, g, h]
+    cases o with
+    | none =>
+      simp only [Option.none_or, Option.toList_none, List.nil_append]
+      rw [lowerBound?_append_of_forall_mem_left]
+    | some p =>
+        simp
+
+
+  sorry
 
 end Raw
 

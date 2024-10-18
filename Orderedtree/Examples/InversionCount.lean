@@ -11,7 +11,12 @@ def inversions (l : List Nat) : Nat := Id.run do
   let mut m : DOrderedTree.Raw Nat (fun _ => Unit) := .leaf
   let mut ans := 0
   for x in l do
-    let insPt : Nat := m.insertionPoint Ord.compare x
+    let insPt : Nat := m.insertionPoint x
     ans := ans + (m.size - insPt)
-    m := m.insert Ord.compare x ()
+    m := m.insert x ()
   return ans
+
+def ofList (l : List (Nat × Nat)) : DOrderedTree.Raw Nat (fun _ => Nat) :=
+  l.foldl (init := .leaf) (fun l (a, b) => l.insert a b)
+
+-- #eval! inversions [4, 3, 1, 2]

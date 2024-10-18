@@ -30,6 +30,9 @@ theorem Ordering.isLE_iff_eq_lt_or_eq_eq {o : Ordering} : o.isLE ↔ o = .lt ∨
 theorem Ordering.isLE_of_eq_lt {o : Ordering} : o = .lt → o.isLE := by
   rintro rfl; rfl
 
+theorem Ordering.isLE_of_eq_eq {o : Ordering} : o = .eq → o.isLE := by
+  rintro rfl; rfl
+
 -- https://github.com/leanprover/lean4/issues/5295
 instance : LawfulBEq Ordering where
   eq_of_beq {a b} := by cases a <;> cases b <;> simp <;> rfl
@@ -348,5 +351,10 @@ theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k 
   cases hc : containsKey k xs
   · rw [cond_false, lowerBound?_cons]
   · rw [cond_true, lowerBound?_replaceEntry_of_containsKey_eq_true hc h]
+
+theorem lowerBound?_append_of_forall_mem_left [TransOrd α] {l₁ l₂ : List ((a : α) × β a)} {k : α} (h : ∀ p ∈ l₁, p.1 < k) :
+    lowerBound? (l₁ ++ l₂) k = lowerBound? l₂ k := by
+  rw [lowerBound?, lowerBound?, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append]
+  exact fun p hp => by simpa using not_le_iff_lt.2 (h p hp)
 
 end Std.DHashMap.Internal.List
