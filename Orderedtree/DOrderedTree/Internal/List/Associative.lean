@@ -455,4 +455,16 @@ theorem lowerBound?_eq_head? {l : List ((a : α) × β a)} {k : α} (h : ∀ p �
     lowerBound? l k = l.head? := by
   rw [lowerBound?, List.filter_eq_self.2 (decide_eq_true <| h · ·), List.min?_eq_head? (hl.imp min_eq_left_of_lt')]
 
+/-- The number of entries whose key is strictly less than the given key. -/
+def rank (k : α) (l : List ((a : α) × β a)) : Nat :=
+  l.filter (·.1 < k) |>.length
+
+theorem rank_append_eq_left [OrientedOrd α] {k : α} {l₁ l₂ : List ((a : α) × β a)} (hl₂ : ∀ p ∈ l₂, k ≤ p.1) :
+    rank k (l₁ ++ l₂) = rank k l₁ := by
+  simpa [rank, not_lt_iff_le]
+
+theorem rank_eq_length {k : α} {l : List ((a : α) × β a)} (hl : ∀ p ∈ l, p.1 < k) :
+    rank k l = l.length := by
+  simpa [rank]
+
 end Std.DHashMap.Internal.List

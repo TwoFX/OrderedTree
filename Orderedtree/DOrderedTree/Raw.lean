@@ -325,6 +325,19 @@ def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a 
 def insertₘ [Ord α] (k : α) (v : β k) : Raw α β → Raw α β :=
   updateAtKey k (fun _ => some ⟨k, v⟩)
 
+inductive Sized : Raw α β → Prop where
+  | leaf : Sized leaf
+  | inner {sz ky y l r} : Sized l → Sized r → sz = 1 + l.size + r.size → Sized (Raw.inner sz ky y l r : Raw α β)
+
+theorem Sized.left {sz ky y l r} : (Raw.inner sz ky y l r : Raw α β).Sized → l.Sized
+  | inner h _ _ => h
+
+theorem Sized.right {sz ky y l r} : (Raw.inner sz ky y l r : Raw α β).Sized → r.Sized
+  | inner _ h _ => h
+
+theorem Sized.eq {sz ky y l r} : (Raw.inner sz ky y l r : Raw α β).Sized → (Raw.inner sz ky y l r).size = 1 + l.size + r.size
+  | inner _ _ h => h
+
 variable (α β) in
 inductive ExplorationStep where
   /-- Needle was less than key at this node: return key-value pair and unexplored right subtree,
@@ -388,6 +401,19 @@ theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Raw α β} : l.lowe
     | eq => simp
     | gt => rw [ih₂]
 
+theorem lowerBound?_eq_lowerBound?ₘ₂ [Ord α] {k : α} {l : Raw α β} : l.lowerBound? k = l.lowerBound?ₘ₂ k := by
+  rw [lowerBound?, lowerBound?ₘ₂]
+  suffices ∀ o, lowerBound?.go k o l = explore₂ k o _ l from this none
+  intro o
+  induction l generalizing o with
+  | leaf => simp [explore₂, lowerBound?.go]
+  | inner s ky y l r ih₁ ih₂ =>
+    rw [lowerBound?.go, explore₂]
+    cases compare k ky with
+    | lt => simp [ih₁]
+    | eq => simp
+    | gt => simp [ih₂]
+
 @[specialize] def get? [Ord α] (h : ∀ {k₁ k₂ : α}, compare k₁ k₂ = .eq → k₁ = k₂) (k : α) : Raw α β → Option (β k)
 | leaf => none
 | inner _ ky y l r =>
@@ -433,6 +459,27 @@ theorem insertionPoint_eq_insertionPointₘ [Ord α] {k : α} {l : Raw α β} :
     | eq => simp
     | gt => simpa [Nat.add_assoc] using ih₂ _
 
+def insertionPointₘ₂ [Ord α] (k : α) (l : Raw α β) : Nat :=
+  explore₂ k 0 (fun sofar step =>
+    match step with
+    | .lt _ _ _ => sofar
+    | .eq l _ _ _ => sofar + l.size
+    | .gt l _ _ => sofar + 1 + l.size) l
+
+theorem insertionPoint_eq_insertionPointₘ₂ [Ord α] {k : α} {l : Raw α β} :
+    l.insertionPoint k = l.insertionPointₘ₂ k := by
+  rw [insertionPoint, insertionPointₘ₂]
+  suffices ∀ n, insertionPoint.go k n l = explore₂ k n _ l from this 0
+  intro n
+  induction l generalizing n with
+  | leaf => simp [explore₂, insertionPoint.go]
+  | inner s ky y l r ih₁ ih₂ =>
+    rw [insertionPoint.go, explore₂]
+    cases compare k ky with
+    | lt => simp [ih₁]
+    | eq => simp
+    | gt => simp [ih₂]
+
 def depth : Raw α β → Nat
 | leaf => 0
 | inner _ _ _ l r => 1 + max l.depth r.depth
@@ -448,7 +495,12 @@ theorem toList_leaf : (Raw.leaf : Raw α β).toList = [] := rfl
 theorem toList_inner {s k v l r} :
     (Raw.inner s k v l r : Raw α β).toList = l.toList ++ ⟨k, v⟩ :: r.toList := rfl
 
-
+theorem Sized.length_toList {l : Raw α β} (hl : l.Sized) : l.toList.length = l.size := by
+  induction l with
+  | leaf => simp
+  | inner sz _ _ l r ih₁ ih₂ =>
+    simp only [toList_inner, List.length_append, ih₁ hl.left, List.length_cons, ih₂ hl.right, hl.eq]
+    ac_rfl
 
 theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂) : (balanceR k v l r h₁ h₂).toList = (Raw.inner 0 k v l r).toList :=
   sorry
@@ -709,14 +761,22 @@ theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k)
   rw [insertEntry_append_of_not_contains_right (h₃ h), hfg]
   exact fun p hp => BEq.symm (beq_of_mem_getEntry hp)
 
-theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (hl : l.Ordered) {k : α} {init : γ}
+theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β}
+
+    (P : Raw α β → Prop)
+    (hPl : ∀ {sz ky y l r}, P (Raw.inner sz ky y l r : Raw α β) → P l)
+    (hPr : ∀ {sz ky y l r}, P (Raw.inner sz ky y l r : Raw α β) → P r)
+    (hP : P l)
+
+    (hl : l.Ordered) {k : α} {init : γ}
+
     (f : γ → ExplorationStep α β → γ)
     (g : List ((a : α) × β a) → Option ((a : α) × β a) → List ((a : α) × β a) → γ)
     (h : List ((a : α) × β a) → γ)
 
-    (hfg₁ : ∀ l₁ l₂ ky y r, f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂))
-    (hfg₂ : ∀ l₁ l₂ l ky y r, f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂))
-    (hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂)
+    (hfg₁ : ∀ l₁ l₂ ky y r, P r → f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂))
+    (hfg₂ : ∀ l₁ l₂ l ky y r, P l → P r → f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂))
+    (hfg₃ : ∀ l₁ l₂ l ky y, P l → f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂)
 
     (hg₀ : g [] none [] = init)
 
@@ -739,7 +799,7 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (h
     | inner sz k' v' l r ih₁ ih₂ =>
       simp only [explore₂, toList_inner, List.filter_append, List.find?_append]
       split <;> rename_i hcmp
-      · rw [hfg₁, ih₁ hl.left]
+      · rw [hfg₁ _ _ _ _ _ (hPr hP), ih₁ (hPl hP) hl.left]
         · have hp' (p) (hp : p ∈ r.toList) : k < p.1 := lt_trans hcmp (hl.compare_right (mem_of_mem_toList hp))
           congr 1
           · simp only [List.append_cancel_left_eq, List.self_eq_append_right,
@@ -760,7 +820,7 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (h
             · exact hl.compare_left hk''
             · exact lt_trans (hl.compare_left hk'') (hl.compare_right (mem_of_mem_toList hp))
           · exact hl₂ p hp k'' (mem_inner_iff.2 (Or.inl hk''))
-      · rw [hfg₂]
+      · rw [hfg₂ _ _ _ _ _ _ (hPl hP) (hPr hP)]
         have hpr (p) (hp : p ∈ r.toList) : k < p.1 := lt_of_beq_of_lt (beq_iff.2 hcmp) (hl.compare_right (mem_of_mem_toList hp))
         have hpl (p) (hp : p ∈ l.toList) : p.1 < k := lt_of_lt_of_beq (hl.compare_left (mem_of_mem_toList hp)) (BEq.symm (beq_iff.2 hcmp))
         congr 1
@@ -779,7 +839,7 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (h
           · simp only [decide_eq_true_eq]
             exact fun p hp => not_lt_of_lt (hpl _ hp)
       · rw [← lt_iff'] at hcmp
-        rw [hfg₃, ih₂ hl.right]
+        rw [hfg₃ _ _ _ _ _ (hPl hP), ih₂ (hPr hP) hl.right]
         have hp' (p) (hp : p ∈ l.toList) : p.1 < k := lt_trans (hl.compare_left (mem_of_mem_toList hp)) hcmp
         · congr 1
           · simp only [List.append_assoc, List.singleton_append, List.append_cancel_left_eq]
@@ -808,7 +868,6 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (h
   · exact hl.pairwise'.sublist (List.filter_sublist _)
   · exact hl.pairwise'.sublist (List.filter_sublist _)
 
-
 theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} (hl : l.Ordered) {k : α} :
     l.lowerBound?ₘ₂ k = Std.DHashMap.Internal.List.lowerBound? l.toList k := by
   rw [lowerBound?ₘ₂]
@@ -821,11 +880,11 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} (hl : l.Orde
     fun _ o l₂ => o.or l₂.head?
   let h : List ((a : α) × β a) → Option ((a : α) × β a) := (Std.DHashMap.Internal.List.lowerBound? · k)
 
-  have hfg₁ : ∀ l₁ l₂ ky y r, f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂) := by
+  have hfg₁ : ∀ l₁ l₂ ky y r, True → f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂) := by
     simp [f, g]
-  have hfg₂ : ∀ l₁ l₂ l ky y r, f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂) := by
+  have hfg₂ : ∀ l₁ l₂ l ky y r, True → True → f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂) := by
     simp [f, g]
-  have hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂ := by
+  have hfg₃ : ∀ l₁ l₂ l ky y, True → f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂ := by
     simp [f, g]
 
   have hg₀ : g [] none [] = none := by simp [g]
@@ -850,7 +909,47 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} (hl : l.Orde
       · exact le_of_beq (BEq.symm (beq_iff.2 ho))
       · exact fun q hq => Or.inr (le_of_lt (lt_of_beq_of_lt (beq_iff.2 ho) (hl₂ _ hq)))
 
-  apply apply_explore₂ hl f g h hfg₁ hfg₂ hfg₃ hg₀ hgh
+  exact apply_explore₂ (fun _ => True) (by simp) (by simp) (by simp) hl f g h hfg₁ hfg₂ hfg₃ hg₀ hgh
+
+theorem apply_insertionPoint [Ord α] [TransOrd α] {l : Raw α β} (hl : l.Ordered) (hl' : l.Sized) {k : α} :
+    l.insertionPoint k = rank k l.toList := by
+  rw [insertionPoint_eq_insertionPointₘ₂, insertionPointₘ₂]
+  let f : Nat → ExplorationStep α β → Nat := fun sofar step =>
+    match step with
+    | .lt _ _ _ => sofar
+    | .eq l _ _ _ => sofar + l.size
+    | .gt l _ _ => sofar + 1 + l.size
+  let g : List ((a : α) × β a) → Option ((a : α) × β a) → List ((a : α) × β a) → Nat :=
+    fun l₁ _ _ => l₁.length
+  let h : List ((a : α) × β a) → Nat := rank k
+
+  have hfg₁ : ∀ l₁ l₂ ky y r, r.Sized → f (g l₁ none l₂) (.lt ky y r) = g l₁ none (⟨ky, y⟩ :: r.toList ++ l₂) := by
+    simp [f, g]
+  have hfg₂ : ∀ l₁ l₂ l ky y r, l.Sized → r.Sized → f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂) := by
+    intro l₁ l₂ l ky y r hl hr
+    simp [f, g, hl.length_toList]
+  have hfg₃ : ∀ l₁ l₂ l ky y, l.Sized → f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂ := by
+    intro l₁ l₂ l ky y hl
+    simp [f, g, hl.length_toList]
+    ac_rfl
+
+  have hg₀ : g [] none [] = 0 := by simp [g]
+
+  have hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
+      (∀ p ∈ o, compare p.1 k = .eq) →
+      (∀ p ∈ l₂, compare k p.1 = .lt) →
+      (l₁.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
+      (l₂.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
+      g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂) := by
+    intro l₁ o l₂ hl₁ ho hl₂ hl₁' hl₂'
+    simp only [List.append_assoc, g, h]
+    rw [rank_append_eq_left, rank_eq_length hl₁]
+    simp only [List.mem_append, Option.mem_toList, Option.mem_def]
+    rintro p (rfl|hp)
+    · exact le_of_beq (BEq.symm (beq_iff.2 (by simpa using ho)))
+    · exact le_of_lt (hl₂ _ hp)
+
+  exact apply_explore₂ Sized Sized.left Sized.right hl' hl f g h hfg₁ hfg₂ hfg₃ hg₀ hgh
 
 end Raw
 
