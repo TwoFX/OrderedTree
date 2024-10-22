@@ -203,6 +203,9 @@ theorem not_le_iff_lt [OrientedOrd α] {a b : α} : ¬a ≤ b ↔ b < a := by
 theorem not_lt_iff_le [OrientedOrd α] {a b : α} : ¬a < b ↔ b ≤ a :=
   Decidable.not_iff_comm.1 not_le_iff_lt
 
+theorem not_lt_of_lt [OrientedOrd α] {a b : α} (h : a < b) : ¬b < a :=
+  not_lt_iff_le.2 (le_of_lt h)
+
 theorem lt_iff' [OrientedOrd α] {a b : α} : a < b ↔ compare b a = .gt := by
   rw [lt_iff, compare_eq_gt_iff]
 
@@ -309,6 +312,30 @@ local instance [TransOrd α] : Std.Associative (min : (a : α) × β a → (a : 
       contradiction
 
 namespace Std.DHashMap.Internal.List
+
+theorem eq_append [TransOrd α] {l : List ((a : α) × β a)} (hl : l.Pairwise (·.1 < ·.1)) {k : α} :
+    l = l.filter (·.1 < k) ++ ((l.find? (·.1 == k)).toList ++ l.filter (k < ·.1)) := by
+  induction l with
+  | nil => simp
+  | cons x l ih =>
+    rcases lt_or_lt_or_beq x.1 k with hx|hx|hx
+    · simpa [List.filter_cons, hx, not_lt_of_lt hx, List.find?_cons, beq_eq_false_of_lt hx] using ih hl.of_cons
+    · have h₁ (y) (hy : y ∈ l) : ¬(decide (y.1 < k)) = true := by
+        simp only [decide_eq_true_eq]
+        exact not_lt_of_lt (lt_trans hx (List.rel_of_pairwise_cons hl hy))
+      have h₂ (y) (hy : y ∈ l) : ¬(y.1 == k) = true := by
+        simp only [Bool.not_eq_true]
+        exact BEq.symm_false (beq_eq_false_of_lt (lt_trans hx (List.rel_of_pairwise_cons hl hy)))
+      simpa [List.filter_cons, hx, not_lt_of_lt hx, List.find?_cons, BEq.symm_false (beq_eq_false_of_lt hx),
+        List.filter_eq_nil_iff.2 h₁, List.find?_eq_none.2 h₂] using ih hl.of_cons
+    · have h₁ (y) (hy : y ∈ l) : ¬(decide (y.1 < k)) = true := by
+        simp only [decide_eq_true_eq]
+        exact not_lt_of_lt (lt_of_beq_of_lt (BEq.symm hx) (List.rel_of_pairwise_cons hl hy))
+      have h₂ (y) (hy : y ∈ l) : ¬(y.1 == k) = true := by
+        simp only [Bool.not_eq_true]
+        refine BEq.symm_false (beq_eq_false_of_lt (lt_of_beq_of_lt (BEq.symm hx) (List.rel_of_pairwise_cons hl hy)))
+      simpa [List.filter_cons, List.filter_eq_nil_iff.2 h₁, not_lt_of_beq hx, not_lt_of_beq (BEq.symm hx),
+        List.find?_cons, hx, List.find?_eq_none.2 h₂] using ih hl.of_cons
 
 /-- The smallest element of `xs` that is not less than `k`. -/
 def lowerBound? (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=

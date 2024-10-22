@@ -489,6 +489,10 @@ attribute [local instance] beqOfOrd equivBEqOfTransOrd
 theorem mem_keys_toList {l : Raw α β} {k : α} : k ∈ keys l.toList ↔ k ∈ l := by
   induction l <;> simp_all
 
+theorem mem_of_mem_toList {l : Raw α β} {p : (a : α) × β a} (h : p ∈ l.toList) : p.1 ∈ l := by
+  rw [← mem_keys_toList, keys_eq_map, List.mem_map]
+  exact ⟨p, h, rfl⟩
+
 theorem beq_of_mem_getEntry [Ord α] [TransOrd α] {l : Raw α β} {k : α} {p} : p ∈ l.getEntry? k → k == p.1 := by
   induction l using Raw.getEntry?.induct k
   · simp [getEntry?]
@@ -508,6 +512,10 @@ theorem Ordered.pairwise [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) 
       List.mem_cons, forall_eq_or_imp]
     refine ⟨h₅, ⟨by simpa [mem_keys_toList], h₆⟩, fun a ha => ⟨h₃ a (mem_keys_toList.1 ha), fun b hb => ?_⟩⟩
     exact lt_trans (h₃ a (mem_keys_toList.1 ha)) (h₄ b (mem_keys_toList.1 hb))
+
+theorem Ordered.pairwise' [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : l.toList.Pairwise (·.1 < ·.1) := by
+  have := h.pairwise
+  rwa [keys_eq_map, List.pairwise_map] at this
 
 theorem Ordered.distinctKeys [Ord α] [TransOrd α] {l : Raw α β} (h : l.Ordered) : DistinctKeys l.toList :=
   ⟨h.pairwise.imp beq_eq_false_of_lt⟩
@@ -701,7 +709,7 @@ theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k)
   rw [insertEntry_append_of_not_contains_right (h₃ h), hfg]
   exact fun p hp => BEq.symm (beq_of_mem_getEntry hp)
 
-theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} {k : α} {init : γ}
+theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} (hl : l.Ordered) {k : α} {init : γ}
     (f : γ → ExplorationStep α β → γ)
     (g : List ((a : α) × β a) → Option ((a : α) × β a) → List ((a : α) × β a) → γ)
     (h : List ((a : α) × β a) → γ)
@@ -710,6 +718,8 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} {k
     (hfg₂ : ∀ l₁ l₂ l ky y r, f (g l₁ none l₂) (.eq l ky y r) = g (l₁ ++ l.toList) (some ⟨ky, y⟩) (r.toList ++ l₂))
     (hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂)
 
+    (hg₀ : g [] none [] = init)
+
     (hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
       (∀ p ∈ o, compare p.1 k = .eq) →
       (∀ p ∈ l₂, compare k p.1 = .lt) →
@@ -717,18 +727,89 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} {k
       (l₂.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
       g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂))
 
-    (hh₁ : h [] = init)
-
     :
     explore₂ k init f l = h (l.toList) := by
-  induction init, f, l using explore₂.induct k
-  · simp [explore₂, hh₁]
-  · sorry
-  · sorry
-  · sorry
+  have step₁ : explore₂ k init f l = g (l.toList.filter (·.1 < k)) (l.toList.find? (·.1 == k)) (l.toList.filter (k < ·.1)) := by
+    suffices ∀ (l₁ l₂ : List ((a : α) × β a)) (hl₁ : ∀ (p) (hp : p ∈ l₁) (k' : α), k' ∈ l → p.1 < k') (hl₂ : ∀ (p) (hp : p ∈ l₂) (k' : α), k' ∈ l → k' < p.1),
+        explore₂ k (g l₁ none l₂) f l = g (l₁ ++ l.toList.filter (·.1 < k)) (l.toList.find? (·.1 == k)) (l.toList.filter (k < ·.1) ++ l₂) by
+      simpa [hg₀] using this [] [] (by simp) (by simp)
+    intro l₁ l₂ hl₁ hl₂
+    induction l generalizing l₁ l₂ with
+    | leaf => simp [explore₂]
+    | inner sz k' v' l r ih₁ ih₂ =>
+      simp only [explore₂, toList_inner, List.filter_append, List.find?_append]
+      split <;> rename_i hcmp
+      · rw [hfg₁, ih₁ hl.left]
+        · have hp' (p) (hp : p ∈ r.toList) : k < p.1 := lt_trans hcmp (hl.compare_right (mem_of_mem_toList hp))
+          congr 1
+          · simp only [List.append_cancel_left_eq, List.self_eq_append_right,
+              List.filter_eq_nil_iff, List.mem_cons, decide_eq_true_eq, forall_eq_or_imp]
+            exact ⟨not_lt_of_lt hcmp, fun p hp => not_lt_of_lt (hp' _ hp)⟩
+          · suffices List.find? (·.1 == k) (⟨k', v'⟩ :: r.toList) = none by simp [this]
+            simp only [List.find?_eq_none, List.mem_cons, Bool.not_eq_true, forall_eq_or_imp]
+            exact ⟨BEq.symm_false (beq_eq_false_of_lt hcmp), (fun p hp => BEq.symm_false (beq_eq_false_of_lt (hp' _ hp)))⟩
+          · simp only [List.cons_append, List.append_assoc, List.append_cancel_left_eq]
+            rw [List.filter_eq_self.2]
+            · simp only [List.cons_append]
+            · simp only [List.mem_cons, decide_eq_true_eq, forall_eq_or_imp]
+              exact ⟨hcmp, hp'⟩
+        · exact fun p hp k' hk' => hl₁ p hp k' (mem_inner_iff.2 (Or.inl hk'))
+        · intro p hp k'' hk''
+          rcases List.mem_append.1 hp with hp|hp
+          · rcases List.mem_cons.1 hp with rfl|hp
+            · exact hl.compare_left hk''
+            · exact lt_trans (hl.compare_left hk'') (hl.compare_right (mem_of_mem_toList hp))
+          · exact hl₂ p hp k'' (mem_inner_iff.2 (Or.inl hk''))
+      · rw [hfg₂]
+        have hpr (p) (hp : p ∈ r.toList) : k < p.1 := lt_of_beq_of_lt (beq_iff.2 hcmp) (hl.compare_right (mem_of_mem_toList hp))
+        have hpl (p) (hp : p ∈ l.toList) : p.1 < k := lt_of_lt_of_beq (hl.compare_left (mem_of_mem_toList hp)) (BEq.symm (beq_iff.2 hcmp))
+        congr 1
+        · rw [List.append_cancel_left_eq, List.filter_eq_self.2, List.filter_eq_nil_iff.2, List.append_nil]
+          · simp only [List.mem_cons, decide_eq_true_eq, forall_eq_or_imp]
+            exact ⟨not_lt_of_beq (BEq.symm (beq_iff.2 hcmp)), fun p hp => not_lt_of_lt (hpr _ hp)⟩
+          · simpa using hpl
+        · rw [List.find?_eq_none.2, Option.none_or, List.find?_cons_of_pos]
+          · exact BEq.symm (beq_iff.2 hcmp)
+          · simp only [Bool.not_eq_true]
+            exact fun p hp => beq_eq_false_of_lt (hpl _ hp)
+        · rw [List.filter_eq_nil_iff.2, List.nil_append, List.filter_cons_of_neg, List.filter_eq_self.2]
+          · simpa using hpr
+          · simp only [decide_eq_true_eq]
+            exact not_lt_of_beq (beq_iff.2 hcmp)
+          · simp only [decide_eq_true_eq]
+            exact fun p hp => not_lt_of_lt (hpl _ hp)
+      · rw [← lt_iff'] at hcmp
+        rw [hfg₃, ih₂ hl.right]
+        have hp' (p) (hp : p ∈ l.toList) : p.1 < k := lt_trans (hl.compare_left (mem_of_mem_toList hp)) hcmp
+        · congr 1
+          · simp only [List.append_assoc, List.singleton_append, List.append_cancel_left_eq]
+            rw [Eq.comm, List.filter_eq_self.2, List.filter_cons_of_pos] <;> simpa
+          · rw [Eq.comm, List.find?_eq_none.2, Option.none_or, List.find?_cons_of_neg]
+            · simp only [Bool.not_eq_true]
+              exact beq_eq_false_of_lt hcmp
+            · simp only [Bool.not_eq_true]
+              exact fun p hp => beq_eq_false_of_lt (hp' _ hp)
+          · rw [Eq.comm, List.filter_eq_nil_iff.2, List.nil_append, List.filter_cons_of_neg]
+            · simpa using not_lt_of_lt hcmp
+            · simp only [decide_eq_true_eq]
+              exact fun p hp => not_lt_of_lt (hp' _ hp)
+        · simp only [List.append_assoc, List.mem_append, List.mem_singleton]
+          rintro p (hp|hp|rfl) k'' hk''
+          · exact hl₁ p hp k'' (mem_inner_iff.2 (Or.inr (Or.inr hk'')))
+          · exact lt_trans (hl.compare_left (mem_of_mem_toList hp)) (hl.compare_right hk'')
+          · exact hl.compare_right hk''
+        · exact fun p hp k'' hk'' => hl₂ p hp k'' (mem_inner_iff.2 (Or.inr (Or.inr hk'')))
+
+  rw [step₁, hgh, List.append_assoc, ← eq_append]
+  · exact hl.pairwise'
+  · simpa using fun _ _ => id
+  · simpa [List.find?_eq_some] using fun _ h _ _ _ _ => beq_iff.1 h
+  · simpa using fun _ _ => id
+  · exact hl.pairwise'.sublist (List.filter_sublist _)
+  · exact hl.pairwise'.sublist (List.filter_sublist _)
 
 
-theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
+theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} (hl : l.Ordered) {k : α} :
     l.lowerBound?ₘ₂ k = Std.DHashMap.Internal.List.lowerBound? l.toList k := by
   rw [lowerBound?ₘ₂]
   let f : Option ((a : α) × β a) → ExplorationStep α β → Option ((a : α) × β a) := fun sofar step =>
@@ -746,6 +827,8 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
     simp [f, g]
   have hfg₃ : ∀ l₁ l₂ l ky y, f (g l₁ none l₂) (.gt l ky y) = g (l₁ ++ l.toList ++ [⟨ky, y⟩]) none l₂ := by
     simp [f, g]
+
+  have hg₀ : g [] none [] = none := by simp [g]
 
   have hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
       (∀ p ∈ o, compare p.1 k = .eq) →
@@ -767,7 +850,7 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
       · exact le_of_beq (BEq.symm (beq_iff.2 ho))
       · exact fun q hq => Or.inr (le_of_lt (lt_of_beq_of_lt (beq_iff.2 ho) (hl₂ _ hq)))
 
-  sorry
+  apply apply_explore₂ hl f g h hfg₁ hfg₂ hfg₃ hg₀ hgh
 
 end Raw
 
