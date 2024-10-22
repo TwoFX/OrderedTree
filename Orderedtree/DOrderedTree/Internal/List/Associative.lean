@@ -10,6 +10,54 @@ set_option autoImplicit false
 
 universe u v
 
+theorem Option.unattach_eq_some {α : Type u} {p : α → Prop} {a : α} {o : Option { x // p x}} : o.unattach = some a ↔ ∃ h : p a, o = some ⟨a, h⟩ :=
+  o.rec (by simp) (fun h => ⟨by simp only [unattach_some, some.injEq]; rintro rfl; exact ⟨h.2, rfl⟩,
+    by simp only [some.injEq, unattach_some, forall_exists_index]; rintro hx rfl; rfl⟩)
+
+-- unused
+theorem List.min?_mem₂ {α : Type u} [Min α] {xs : List α} (min_eq_or : ∀ a b : α, a ∈ xs → b ∈ xs → min a b = a ∨ min a b = b) {a : α} :
+    xs.min? = some a → a ∈ xs := by
+  match xs with
+  | List.nil => simp
+  | x :: xs =>
+    simp only [List.min?_cons', Option.some.injEq, List.mem_cons]
+    intro eq
+    induction xs generalizing x with
+    | nil =>
+      simp at eq
+      simp [eq]
+    | cons y xs ind =>
+      simp at eq
+      have hxy : min x y = x ∨ min x y = y := min_eq_or x y (List.mem_cons_self _ _) (List.mem_cons_of_mem _ (List.mem_cons_self _ _))
+      have p := ind _ ?_ eq
+      · cases p with
+        | inl p =>
+          cases hxy with | _ q => simp [p, q]
+        | inr p => simp [p, List.mem_cons]
+      · intro a b ha hb
+        apply min_eq_or
+        · refine hxy.elim (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_) (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_)
+          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
+          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
+          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+        · refine hxy.elim (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_) (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_)
+          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
+          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
+          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+
+theorem List.min?_eq_head? {α : Type u} [Min α] {l : List α} (h : l.Pairwise (fun a b => min a b = a)) : l.min? = l.head? := by
+  cases l with
+  | nil => simp
+  | cons x l =>
+    rw [List.head?_cons, List.min?_cons', Option.some.injEq]
+    induction l generalizing x with
+    | nil => simp
+    | cons y l ih =>
+      have hx : min x y = x := List.rel_of_pairwise_cons h (List.mem_cons_self _ _)
+      rw [List.foldl_cons, ih _ (hx.symm ▸ h.sublist (by simp)), hx]
+
 theorem Ordering.eq_eq_of_isLE_of_isLE_swap {o : Ordering} : o.isLE → o.swap.isLE → o = .eq := by
   cases o <;> simp [isLE, swap]
 
@@ -240,6 +288,12 @@ theorem min_eq_or {p q : (a : α) × β a} : min p q = p ∨ min p q = q := by
   rw [min_def']
   split <;> simp
 
+theorem min_eq_left' {p q : (a : α) × β a} (h : p.1 ≤ q.1) : min p q = p := by
+  simp [min_def', h]
+
+theorem min_eq_left_of_lt' {p q : (a : α) × β a} (h : p.1 < q.1) : min p q = p :=
+  min_eq_left' (le_of_lt h)
+
 -- Is this provable without `TransOrd`?
 local instance [TransOrd α] : Std.Associative (min : (a : α) × β a → (a : α) × β a → (a : α) × β a) where
   assoc a b c := by
@@ -287,6 +341,19 @@ theorem lowerBound?_cons [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v
   · next h =>
     rw [not_le_iff_lt] at h
     simp [h, lowerBound?]
+
+theorem lowerBound?_cons_eq_self [TransOrd α] {l : List ((a : α) × β a)} {p : (a : α) × β a} {k : α}
+    (hp : k ≤ p.1) (hl : ∀ q ∈ l, q.1 < k ∨ p.1 ≤ q.1) : lowerBound? (p :: l) k = some p := by
+  rw [lowerBound?_cons]
+  simp only [not_lt_iff_le.2 hp, ↓reduceIte, Option.some.injEq]
+  rw [lowerBound?]
+  cases h : (l.filter (fun p => k ≤ p.1)).min? with
+  | none => simp
+  | some q =>
+    have := List.mem_filter.1 (List.min?_mem (fun _ _ => min_eq_or) h)
+    simp only [decide_eq_true_eq] at this
+    suffices p.1 ≤ q.1 by simpa using min_eq_left' this
+    exact (hl _ this.1).resolve_left (not_lt_iff_le.2 this.2)
 
 theorem min_comm_of_lt_or_lt [OrientedOrd α] {p p' : (a : α) × β a} (h : p.1 < p'.1 ∨ p'.1 < p.1) :
     min p p' = min p' p := by
@@ -356,5 +423,9 @@ theorem lowerBound?_append_of_forall_mem_left [TransOrd α] {l₁ l₂ : List ((
     lowerBound? (l₁ ++ l₂) k = lowerBound? l₂ k := by
   rw [lowerBound?, lowerBound?, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append]
   exact fun p hp => by simpa using not_le_iff_lt.2 (h p hp)
+
+theorem lowerBound?_eq_head? {l : List ((a : α) × β a)} {k : α} (h : ∀ p ∈ l, k ≤ p.1) (hl : l.Pairwise (fun a b => a.1 < b.1)) :
+    lowerBound? l k = l.head? := by
+  rw [lowerBound?, List.filter_eq_self.2 (decide_eq_true <| h · ·), List.min?_eq_head? (hl.imp min_eq_left_of_lt')]
 
 end Std.DHashMap.Internal.List

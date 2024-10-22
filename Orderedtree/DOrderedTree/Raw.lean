@@ -713,6 +713,8 @@ theorem apply_explore₂ [Ord α] [TransOrd α] {γ : Type w} {l : Raw α β} {k
     (hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
       (∀ p ∈ o, compare p.1 k = .eq) →
       (∀ p ∈ l₂, compare k p.1 = .lt) →
+      (l₁.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
+      (l₂.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
       g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂))
 
     (hh₁ : h [] = init)
@@ -748,19 +750,22 @@ theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {l : Raw α β} {k : α} :
   have hgh : ∀ l₁ o l₂, (∀ p ∈ l₁, compare p.1 k = .lt) →
       (∀ p ∈ o, compare p.1 k = .eq) →
       (∀ p ∈ l₂, compare k p.1 = .lt) →
+      (l₁.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
+      (l₂.Pairwise (fun p q => compare p.1 q.1 = .lt)) →
       g l₁ o l₂ = h (l₁ ++ o.toList ++ l₂) := by
-    intro l₁ o l₂ hl₁ ho hl₂
+    intro l₁ o l₂ hl₁ ho hl₂ hl₁' hl₂'
     simp only [List.append_assoc, g, h]
     cases o with
     | none =>
       simp only [Option.none_or, Option.toList_none, List.nil_append]
-      rw [lowerBound?_append_of_forall_mem_left]
-      sorry
-      sorry
+      rw [lowerBound?_append_of_forall_mem_left hl₁, lowerBound?_eq_head? (le_of_lt <| hl₂ · ·) hl₂']
     | some p =>
-        simp
-        sorry
-
+      simp only [Option.or_some, Option.toList_some, List.singleton_append]
+      rw [lowerBound?_append_of_forall_mem_left hl₁]
+      simp only [Option.mem_def, Option.some.injEq, forall_eq'] at ho
+      rw [lowerBound?_cons_eq_self]
+      · exact le_of_beq (BEq.symm (beq_iff.2 ho))
+      · exact fun q hq => Or.inr (le_of_lt (lt_of_beq_of_lt (beq_iff.2 ho) (hl₂ _ hq)))
 
   sorry
 
