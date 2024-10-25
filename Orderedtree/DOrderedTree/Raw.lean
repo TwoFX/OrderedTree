@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.List.Associative
+import Lean.Elab.Tactic
 
 universe u v w
 
@@ -32,6 +33,7 @@ def size : Raw α β → Nat
   | leaf => 0
 
 -- TODO: this doesn't really gain you anything over defining it to be `k ∈ keys l.toList`.
+
 inductive Mem (k : α) : Raw α β → Prop
   | node {s v l r} : Mem k (Raw.inner s k v l r)
   | left {s k' v l r} : Mem k l → Mem k (Raw.inner s k' v l r)
@@ -81,6 +83,7 @@ theorem ordered_inner_leaf_leaf [Ord α] {s k v} : (Raw.inner s k v .leaf .leaf 
   apply Ordered.inner <;> simp
 
 @[simp] theorem size_leaf : (leaf : Raw α β).size = 0 := rfl
+@[simp] theorem size_inner {sz k v l r} : (Raw.inner sz k v l r : Raw α β).size = sz := rfl
 
 def BalancedAtRoot (left right : Nat) : Prop :=
   left + right ≤ 1 ∨ (left ≤ delta * right ∧ right ≤ delta * left)
@@ -89,12 +92,17 @@ theorem balancedAtRoot_leaf_leaf : BalancedAtRoot (leaf : Raw α β).size (leaf 
   Or.inl (by simp)
 
 -- We actually want the Nat subtraction here!
-def AlmostBalancedAtRootL (left right : Nat) : Prop :=
-  (left - 1) + right ≤ 1 ∨ (left - 1 ≤ delta * right ∧ right ≤ delta * (left - 1))
+def AlmostBalancedAtRoot (left right : Nat) : Prop :=
+  delta * left ≤ delta * delta * right + delta * right + right ∧ right ≤ left
+  --   (delta * sz1 <= delta*delta*sz2 + delta*sz2 + sz2 /\ sz2 <= sz1)%Z.
+  -- (left - 1) + right ≤ 1 ∨ (left - 1 ≤ delta * right ∧ right ≤ delta * (left - 1))
 
 inductive Balanced : Raw α β → Prop
 | leaf : Balanced leaf
 | inner {size k v l r} : Balanced l → Balanced r → BalancedAtRoot l.size r.size → size = 1 + l.size + r.size → Balanced (inner size k v l r)
+
+theorem balanced_inner_iff {sz k v l r} : Balanced (Raw.inner sz k v l r : Raw α β) ↔ Balanced l ∧ Balanced r ∧ BalancedAtRoot l.size r.size ∧ sz = 1 + l.size + r.size :=
+  ⟨by rintro (_|⟨h₁, h₂, h₃, h₄⟩); exact ⟨h₁, h₂, h₃, h₄⟩, fun ⟨h₁, h₂, h₃, h₄⟩ => .inner h₁ h₂ h₃ h₄⟩
 
 theorem Balanced.root {size k v} {l r : Raw α β} : (Raw.inner size k v l r).Balanced → BalancedAtRoot l.size r.size
 | inner _ _ h _ => h
@@ -137,7 +145,23 @@ theorem balanced_singleton {k : α} {v : β k} : (Raw.inner 1 k v .leaf .leaf).B
 instance : Inhabited (Raw α β) where
   default := .leaf
 
-@[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l) (hlr : AlmostBalancedAtRootL l.size r.size) : Raw α β :=
+--  balance_prop (size s1) (size s2) \/
+--    balance_prop_inserted (size s1 - 1) (size s2) /\ (1 <= size s1)%Z \/
+--    balance_prop (size s1) (size s2 + 1)
+
+-- inductive BalanceLPrecondition (left right : Nat) where
+--   | noop : BalancedAtRoot left right → BalanceLPrecondition left right
+--   | inserted : AlmostBalancedAtRoot (left - 1) right → 1 ≤ left → BalanceLPrecondition left right
+--  |
+
+abbrev BalanceLPrecond (left right : Nat) :=
+  BalancedAtRoot left right ∨ (1 ≤ left ∧ (AlmostBalancedAtRoot (left - 1) right))
+
+@[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l)
+    (hlr : BalanceLPrecond l.size r.size)
+    -- (hlr : BalancedAtRoot l.size r.size ∨ /- BalancedAtRoot l.size (r.size + 1) ∨ -/ (1 ≤ l.size ∧ AlmostBalancedAtRoot (l.size - 1) r.size))
+    :
+    Raw α β :=
   match r with
   | leaf => match l with
     | leaf => .inner 1 k v .leaf .leaf
@@ -148,12 +172,14 @@ instance : Inhabited (Raw α β) where
         .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
     | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) =>
         False.elim (by
-          obtain (h|⟨h, -⟩) := hlr
-          all_goals
-          · simp only [hlb.eq, size] at h
-            have := hlb.left.pos
-            have := hlb.right.pos
-            omega)
+          dsimp only [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot] at hlr
+          simp [size] at hlr
+          have := hlb.left.pos
+          have := hlb.right.pos
+          have := hlb.eq
+          simp [size] at this
+          simp only [delta] at *
+          omega)
   | (inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
     | inner ls lk lv ll lr =>
@@ -176,9 +202,53 @@ instance : Inhabited (Raw α β) where
 theorem False.elim' {h : False} {P : α → Prop} : P h.elim :=
   h.elim
 
-theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : AlmostBalancedAtRootL l.size r.size} :
+open Lean Meta Elab Tactic
+
+elab "split_and" : tactic => liftMetaTactic fun mvarId => do
+  let hyps ← getPropHyps
+  for hyp in hyps do
+    let t ← instantiateMVars (← hyp.getType)
+    -- dbg_trace "{t}"
+    if let .app (.app (.const `And _) _) _ := t then
+      return (← runTactic mvarId (← `(tactic| cases $(Lean.mkIdent (← hyp.getUserName)):term))).1
+  throwError "no matching hypothesis found"
+
+-- example (_ : (P ∧ R) ∧ Q) (_ : S ∧ (T ∧ U)) : P := by
+--   repeat' split_and
+--   assumption
+
+
+-- set_option trace.profiler.threshold 50
+-- set_option trace.profiler true in
+-- set_option profiler true in
+theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond l.size r.size} :
     (balanceL k v l r hrb hlb hlr).Balanced := by
-  rw [balanceL.eq_def]
+  simp only [balanceL.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+    repeat' apply And.intro
+  all_goals
+    try apply Balanced.leaf
+    try apply False.elim'
+    try assumption
+  all_goals
+    omega
+    -- try sorry
+
+  -- · apply Or.inr
+  --   constructor
+  --   · omega
+  --   · omega
+
+
+
+
+
+
+  -- split <;> split <;> (try split)
+/-   rw [balanceL.eq_def]
   split
   · split
     · exact balanced_singleton
@@ -256,7 +326,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
           · simp [size]
             omega
           · simp [delta] at *
-            omega
+            omega -/
 
 
 
