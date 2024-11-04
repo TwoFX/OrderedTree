@@ -747,6 +747,29 @@ theorem toList_insertWithoutRebalancing_eq_toList_insertₘ [Ord α] {l : Raw α
   induction l using Raw.insertWithoutRebalancing.induct k v
     <;> simp_all [insertWithoutRebalancing, insertₘ, updateAtKey]
 
+@[simp]
+theorem toList_minViewRaw_tree {k : α} {v : β k} {l r : Raw α β} :
+    ⟨(minViewRaw k v l r).k, (minViewRaw k v l r).v⟩ :: (minViewRaw k v l r).tree.toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  induction k, v, l, r using minViewRaw.induct
+  · simp [minViewRaw]
+  · rename_i k' v' u sz ky y l r ih
+    simp only [minViewRaw, toList_inner]
+    rw [← List.cons_append, ih]
+
+@[simp]
+theorem toList_maxViewRaw_tree {k : α} {v : β k} {l r : Raw α β} :
+    (maxViewRaw k v l r).tree.toList ++ [⟨(maxViewRaw k v l r).k, (maxViewRaw k v l r).v⟩] = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  induction k, v, l, r using maxViewRaw.induct <;> simp_all [maxViewRaw]
+
+@[simp]
+theorem toList_glueRaw {l r : Raw α β} : (glueRaw l r).toList = l.toList ++ r.toList := by
+  simp only [glueRaw]
+  repeat' split
+  · simp
+  · simp
+  · simp
+  · simp only [toList_inner]
+    rw [List.append_cons, toList_maxViewRaw_tree]
 
 open Std.DHashMap.Internal.List
 
