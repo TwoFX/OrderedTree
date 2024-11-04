@@ -771,6 +771,23 @@ theorem toList_glueRaw {l r : Raw α β} : (glueRaw l r).toList = l.toList ++ r.
   · simp only [toList_inner]
     rw [List.append_cons, toList_maxViewRaw_tree]
 
+theorem ordered_glueRaw [Ord α] {l r : Raw α β} (hl : l.Ordered) (hr : r.Ordered) (hlr : ∀ k k', k ∈ l → k' ∈ r → compare k k' = .lt) :
+    (glueRaw l r).Ordered := by
+  simp only [glueRaw]
+  repeat' split
+  · exact hr
+  · exact hl
+  · apply Ordered.inner
+    · exact hl
+    · sorry
+    · sorry
+    · sorry
+  · apply Ordered.inner
+    · sorry
+    · exact hr
+    · sorry
+    · sorry
+
 open Std.DHashMap.Internal.List
 
 @[simp]
@@ -969,7 +986,11 @@ theorem Ordered.updateAtKey [Ord α] [TransOrd α] {l : Raw α β} {k : α}
       · exact hO.compare_left hk'
       · exact lt_of_beq_of_lt hk' hcmp
     · exact fun k' hk' => hO.compare_right hk'
-  · sorry -- erase case
+  · rename_i sz ky y l lr hcmp hf
+    simp only [Raw.updateAtKey, hcmp, hf]
+    refine ordered_glueRaw hO.left hO.right ?_
+    intro k₁ k₂ hk₁ hk₂
+    exact lt_iff.1 (lt_trans (lt_iff.2 (hO.compare_left hk₁)) (lt_iff.2 (hO.compare_right hk₂)))
   · rename_i sz ky y l r hcmp k' v' hfs
     simp only [Raw.updateAtKey, hcmp, hfs]
     refine Ordered.inner hO.left hO.right ?_ ?_
