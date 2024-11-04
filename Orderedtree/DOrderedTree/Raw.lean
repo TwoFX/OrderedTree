@@ -6,6 +6,8 @@ Authors: Markus Himmel
 import Orderedtree.DOrderedTree.Internal.List.Associative
 import Lean.Elab.Tactic
 
+set_option autoImplicit false
+
 universe u v w
 
 -- This closely follows the Haskell implementation at https://hackage.haskell.org/package/containers-0.7/docs/src/Data.Map.Internal.html
@@ -88,6 +90,10 @@ theorem ordered_inner_leaf_leaf [Ord α] {s k v} : (Raw.inner s k v .leaf .leaf 
 def BalancedAtRoot (left right : Nat) : Prop :=
   left + right ≤ 1 ∨ (left ≤ delta * right ∧ right ≤ delta * left)
 
+theorem BalancedAtRoot.symm {left right : Nat} : BalancedAtRoot left right → BalancedAtRoot right left := by
+  simp only [BalancedAtRoot]
+  omega
+
 theorem balancedAtRoot_leaf_leaf : BalancedAtRoot (leaf : Raw α β).size (leaf : Raw α β).size :=
   Or.inl (by simp)
 
@@ -154,11 +160,9 @@ instance : Inhabited (Raw α β) where
 abbrev BalanceLPrecond (left right : Nat) :=
   BalancedAtRoot left right ∨ (1 ≤ left ∧ BalancedAtRoot (left - 1) right)
 
+
 @[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l) --(hq : BalancedAtRoot (l.size - 1) r.size)
-    (hlr : BalanceLPrecond l.size r.size)
-    -- (hlr : BalancedAtRoot l.size r.size ∨ /- BalancedAtRoot l.size (r.size + 1) ∨ -/ (1 ≤ l.size ∧ AlmostBalancedAtRoot (l.size - 1) r.size))
-    :
-    Raw α β :=
+    (hlr : BalanceLPrecond l.size r.size) : Raw α β :=
   match r with
   | leaf => match l with
     | leaf => .inner 1 k v .leaf .leaf
@@ -223,15 +227,13 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   all_goals
     simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
-    -- try simp [Balanced.leaf, *]
     repeat' apply And.intro
   all_goals
     try apply Balanced.leaf
     try apply False.elim'
     try assumption
   all_goals
-    sorry
-    -- omega
+    omega
 
 @[simp] theorem size_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond l.size r.size} :
     (balanceL k v l r hrb hlb hlr).size = 1 + l.size + r.size := by
@@ -287,6 +289,62 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   all_goals
     simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
+    repeat' apply And.intro
+  all_goals
+    try apply Balanced.leaf
+    try apply False.elim'
+    try assumption
+  all_goals
+    omega
+
+@[simp] theorem size_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond r.size l.size} :
+    (balanceR k v l r hlb hrb hlr).size = 1 + l.size + r.size := by
+  simp only [balanceR.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+  all_goals
+    try apply False.elim₂
+    try omega
+
+/-- Slower version of `balanceR` that has to handle additional cases. -/
+@[inline] def balanceRErase (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r) (hlr : BalancedAtRoot (1 + l.size) r.size) : Raw α β :=
+  match l with
+  | leaf => match r with
+    | leaf => .inner 1 k v .leaf .leaf
+    | r@(inner _ _ _ .leaf .leaf) => .inner 2 k v .leaf r
+    | inner _ rk rv .leaf rr@(.inner _ _ _ _ _) => .inner 3 rk rv (.inner 1 k v .leaf .leaf) rr
+    | inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf) (.inner 1 rk rv .leaf .leaf)
+    | inner rs rk rv rl@(.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
+        if rls < ratio * rrs then .inner (1 + rs) rk rv (.inner (1 + rls) k v .leaf rl) rr
+        else .inner (1 + rs) rlk rlv (.inner (1 + rll.size) k v .leaf rll) (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+  | inner ls _ _ _ _ => match r with
+    | leaf => .inner (1 + ls) k v l .leaf
+    | inner rs rk rv rl rr =>
+        if hrsd : rs > delta * ls then match rl, rr with
+          | inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
+              if rls < ratio * rrs then .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l rl) rr
+              else .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll) (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+          | leaf, _ => False.elim (by
+              rw [delta] at hrsd
+              have : 3 < rs := by have := hlb.pos; omega
+              have := hrb.size_leaf_left
+              omega)
+          | _, leaf => False.elim (by
+              rw [delta] at hrsd
+              have : 3 < rs := by have := hlb.pos; omega
+              have := hrb.size_leaf_right
+              omega)
+        else .inner (1 + ls + rs) k v l r
+
+theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalancedAtRoot (1 + l.size) r.size} :
+    (balanceRErase k v l  r hlb hrb hlr).Balanced := by
+  simp only [balanceRErase.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
     -- try simp [Balanced.leaf, *]
     repeat' apply And.intro
   all_goals
@@ -294,12 +352,70 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
     try apply False.elim'
     try assumption
   all_goals
-    -- omega
-    sorry
+    omega
 
-@[simp] theorem size_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond r.size l.size} :
-    (balanceR k v l r hlb hrb hlr).size = 1 + l.size + r.size := by
-  simp only [balanceR.eq_def]
+@[simp] theorem size_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr} :
+    (balanceRErase k v l r hlb hrb hlr).size = 1 + l.size + r.size := by
+  simp only [balanceRErase.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+  all_goals
+    try apply False.elim₂
+    try omega
+
+@[inline] def balanceLErase (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r)
+    (hlr : BalancedAtRoot l.size (r.size + 1)) : Raw α β :=
+  match r with
+  | leaf => match l with
+    | leaf => .inner 1 k v .leaf .leaf
+    | inner _ _ _ .leaf .leaf => .inner 2 k v l .leaf
+    | inner _ lk lv .leaf (.inner _ lrk lrv _ _) =>
+        .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf) (.inner 1 k v .leaf .leaf)
+    | inner _ lk lv ll@(.inner _ _ _ _ _) .leaf =>
+        .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
+    | inner ls lk lv ll@(.inner lls _ _ _ _) lr@(.inner lrs lrk lrv lrl lrr) =>
+        if lrs < ratio * lls then .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v lr .leaf)
+        else .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl) (.inner (1 + lrr.size) k v lrr .leaf)
+  | (inner rs _ _ _ _) => match l with
+    | leaf => .inner (1 + rs) k v .leaf r
+    | inner ls lk lv ll lr =>
+        if hlsd : ls > delta * rs then match ll, lr with
+          | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
+              if lrs < ratio * lls then .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+              else .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl) (.inner (1 + rs + lrr.size) k v lrr r)
+          | leaf, _ => False.elim (by
+              rw [delta] at hlsd
+              have : 3 < ls := by have := hrb.pos; omega
+              have := hlb.size_leaf_left
+              omega)
+          | _, leaf => False.elim (by
+              rw [delta] at hlsd
+              have : 3 < ls := by have := hrb.pos; omega
+              have := hlb.size_leaf_right
+              omega)
+        else .inner (1 + ls + rs) k v l r
+
+theorem balanced_balanceLErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr} :
+    (balanceLErase k v l r hlb hrb hlr).Balanced := by
+  simp only [balanceLErase.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+    -- try simp [Balanced.leaf, *]
+    repeat' apply And.intro
+  all_goals
+    try apply Balanced.leaf
+    try apply False.elim'
+    try assumption
+  all_goals
+    omega
+
+@[simp] theorem size_balanceLErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr} :
+    (balanceLErase k v l r hlb hrb hlr).size = 1 + l.size + r.size := by
+  simp only [balanceLErase.eq_def]
   repeat' split
   all_goals
     simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
@@ -352,6 +468,78 @@ def insertWithoutRebalancing [Ord α] (k : α) (v : β k) : Raw α β → Raw α
   | .eq => .inner sz k v l r
   | .gt => .inner (sz + 1) ky y l (insertWithoutRebalancing k v r)
 
+variable (α β) in
+structure View (n : Nat) where
+  k : α
+  v : β k
+  tree : Raw α β
+  balanced : tree.Balanced
+  hsz : tree.size = n
+
+def minView (k : α) (v : β k) (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
+  match l with
+  | leaf => ⟨k, v, r, hr, by simp⟩
+  | inner _ k' v' l' r' =>
+      let d := minView k' v' l' r' hl.left hl.right hl.root
+      ⟨d.k, d.v, balanceRErase k v d.tree r d.balanced hr (by rwa [hl.eq, size_inner, Nat.add_assoc, ← d.hsz] at h),
+        balanced_balanceRErase, by simp [hl.eq, d.hsz, Nat.add_assoc]⟩
+
+def maxView (k : α) (v : β k) (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
+  match r with
+  | leaf => ⟨k, v, l, hl, by simp⟩
+  | inner _ k' v' l' r' =>
+      let d := maxView k' v' l' r' hr.left hr.right hr.root
+      ⟨d.k, d.v, balanceLErase k v l d.tree hl d.balanced (by rwa [hr.eq, size_inner, Nat.add_assoc, ← d.hsz, Nat.add_comm] at h),
+        balanced_balanceLErase, by simp [hr.eq, d.hsz]; omega⟩
+
+def glue (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : Raw α β :=
+  match l with
+  | .leaf => r
+  | l@hl₀:(.inner sz k v l' r') =>
+    match r with
+    | .leaf => l
+    | r@hr₀:(.inner sz' k' v' l'' r'') =>
+      if sz < sz' then
+        let d := minView k' v' l'' r'' hr.left hr.right hr.root
+        balanceLErase d.k d.v l d.tree (hl₀ ▸ hl) d.balanced (by simp [hl.eq, hr.eq] at h; simp [hl₀, hl.eq, d.hsz]; rwa [Nat.add_comm _ 1, ← Nat.add_assoc])
+      else
+        let d := maxView k v l' r' hl.left hl.right hl.root
+        balanceRErase d.k d.v d.tree r d.balanced (hr₀ ▸ hr) (by simp [hl.eq, hr.eq] at h; simp [hr₀, hr.eq, d.hsz]; rwa [← Nat.add_assoc])
+
+variable (α β) in
+structure RawView where
+  k : α
+  v : β k
+  tree : Raw α β
+
+def minViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
+  match l with
+  | leaf => ⟨k, v, r⟩
+  | inner _ k' v' l' r' =>
+      let d := minViewRaw k' v' l' r'
+      ⟨d.k, d.v, .inner (1 + d.tree.size + r.size) k v d.tree r⟩
+
+def maxViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
+  match r with
+  | leaf => ⟨k, v, l⟩
+  | inner _ k' v' l' r' =>
+      let d := maxViewRaw k' v' l' r'
+      ⟨d.k, d.v, .inner (1 + l.size + d.tree.size) k v l d.tree⟩
+
+def glueRaw (l r : Raw α β) : Raw α β :=
+  match l with
+  | .leaf => r
+  | l@(.inner sz k v l' r') =>
+    match r with
+    | .leaf => l
+    | r@(.inner sz' k' v' l'' r'') =>
+      if sz < sz' then
+        let d := minViewRaw k' v' l'' r''
+        .inner (1 + l.size + d.tree.size) d.k d.v l d.tree
+      else
+        let d := maxViewRaw k v l' r'
+        .inner (1 + d.tree.size + r.size) d.k d.v d.tree r
+
 def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : Raw α β → Raw α β
 | leaf => match f none with
           | none => .leaf
@@ -362,7 +550,7 @@ def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a 
       let newL := updateAtKey k f l
       .inner (1 + newL.size + r.size) ky y newL r
   | .eq => match f (some ⟨ky, y⟩) with
-           | none => sorry -- delete
+           | none => glueRaw l r
            | some ⟨ky', y'⟩ => .inner sz ky' y' l r
   | .gt =>
       let newR := updateAtKey k f r
