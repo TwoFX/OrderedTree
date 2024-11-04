@@ -892,7 +892,14 @@ theorem exists_cell_of_update [Ord α] (l : Raw α β) (k : α)
       refine ⟨hl'₃ hO.left, BEq.symm_false (beq_eq_false_of_lt hcmp), ?_⟩
       apply hO.containsKey_right_of_isLE
       exact Ordering.isLE_of_eq_lt hcmp
-  · sorry -- delete case
+  · rename_i sz ky y l r hcmp hf
+    simp [getEntry?, hcmp, updateAtKey, hf]
+    refine ⟨l.toList ++ r.toList, by simp, by simp, ?_⟩
+    intro _ hO
+    simp only [containsKey_append, Bool.or_eq_false_iff]
+    have hcmp := beq_symm (beq_iff.2 hcmp)
+    refine ⟨hO.containsKey_left_of_isLE (le_iff.1 (le_of_beq hcmp)),
+      hO.containsKey_right_of_isLE (le_iff.1 (le_of_beq (beq_symm hcmp)))⟩
   · rename_i sz ky y l r hcmp k' v' hf
     simp [getEntry?, hcmp, updateAtKey, hf]
     refine ⟨l.toList ++ r.toList, by simp, by simp, ?_⟩
