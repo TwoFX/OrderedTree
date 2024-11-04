@@ -142,22 +142,19 @@ theorem Balanced.size_eq_zero : {r : Raw α β} → r.Balanced → r.size = 0 �
 theorem balanced_singleton {k : α} {v : β k} : (Raw.inner 1 k v .leaf .leaf).Balanced :=
   .inner .leaf .leaf balancedAtRoot_leaf_leaf (by simp)
 
+theorem Balanced.update {sz k k' v v' l r} : (Raw.inner sz k v l r : Raw α β).Balanced → (Raw.inner sz k' v' l r : Raw α β).Balanced
+| inner l r h₁ h₂ => inner l r h₁ h₂
+
 instance : Inhabited (Raw α β) where
   default := .leaf
 
---  balance_prop (size s1) (size s2) \/
---    balance_prop_inserted (size s1 - 1) (size s2) /\ (1 <= size s1)%Z \/
---    balance_prop (size s1) (size s2 + 1)
-
--- inductive BalanceLPrecondition (left right : Nat) where
---   | noop : BalancedAtRoot left right → BalanceLPrecondition left right
---   | inserted : AlmostBalancedAtRoot (left - 1) right → 1 ≤ left → BalanceLPrecondition left right
---  |
+-- abbrev BalanceLPrecond (left right : Nat) :=
+--   BalancedAtRoot left right ∨ BalancedAtRoot left (right + 1) ∨ (1 ≤ left ∧ (AlmostBalancedAtRoot (left - 1) right))
 
 abbrev BalanceLPrecond (left right : Nat) :=
-  BalancedAtRoot left right ∨ (1 ≤ left ∧ (AlmostBalancedAtRoot (left - 1) right))
+  BalancedAtRoot left right ∨ (1 ≤ left ∧ BalancedAtRoot (left - 1) right)
 
-@[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l)
+@[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l) --(hq : BalancedAtRoot (l.size - 1) r.size)
     (hlr : BalanceLPrecond l.size r.size)
     -- (hlr : BalancedAtRoot l.size r.size ∨ /- BalancedAtRoot l.size (r.size + 1) ∨ -/ (1 ≤ l.size ∧ AlmostBalancedAtRoot (l.size - 1) r.size))
     :
@@ -202,6 +199,9 @@ abbrev BalanceLPrecond (left right : Nat) :=
 theorem False.elim' {h : False} {P : α → Prop} : P h.elim :=
   h.elim
 
+theorem False.elim₂ {h : False} {n : Nat} : (h.elim : Raw α β).size = n :=
+  h.elim
+
 open Lean Meta Elab Tactic
 
 elab "split_and" : tactic => liftMetaTactic fun mvarId => do
@@ -213,11 +213,6 @@ elab "split_and" : tactic => liftMetaTactic fun mvarId => do
       return (← runTactic mvarId (← `(tactic| cases $(Lean.mkIdent (← hyp.getUserName)):term))).1
   throwError "no matching hypothesis found"
 
--- example (_ : (P ∧ R) ∧ Q) (_ : S ∧ (T ∧ U)) : P := by
---   repeat' split_and
---   assumption
-
-
 -- set_option trace.profiler.threshold 50
 -- set_option trace.profiler true in
 -- set_option profiler true in
@@ -228,109 +223,28 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   all_goals
     simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
+    -- try simp [Balanced.leaf, *]
     repeat' apply And.intro
   all_goals
     try apply Balanced.leaf
     try apply False.elim'
     try assumption
   all_goals
-    omega
-    -- try sorry
+    sorry
+    -- omega
 
-  -- · apply Or.inr
-  --   constructor
-  --   · omega
-  --   · omega
+@[simp] theorem size_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond l.size r.size} :
+    (balanceL k v l r hrb hlb hlr).size = 1 + l.size + r.size := by
+  simp only [balanceL.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+  all_goals
+    try apply False.elim₂
+    try omega
 
-
-
-
-
-
-  -- split <;> split <;> (try split)
-/-   rw [balanceL.eq_def]
-  split
-  · split
-    · exact balanced_singleton
-    · rename_i hlb _ _
-      simp [hlb.eq]
-      exact .inner balanced_singleton .leaf (Or.inl (by simp [size])) (by simp [size])
-    · exact .inner balanced_singleton balanced_singleton (Or.inr ⟨by simp [delta, size], by simp [delta, size]⟩) (by simp [size])
-    · rename_i l r hlb _ _
-      have := hlb.size_leaf_right
-      rw [hlb.eq, hlb.left.eq, size, size_leaf] at this
-      -- dsimp only at this
-      obtain rfl : l = .leaf := hlb.left.left.size_eq_zero (by omega)
-      obtain rfl : r = .leaf := hlb.left.right.size_eq_zero (by omega)
-      rw [hlb.left.eq]
-      exact .inner (by simpa using balanced_singleton) balanced_singleton (Or.inr ⟨by simp [delta, size], by simp [delta, size]⟩) (by simp [size])
-    · exact False.elim'
-  · split
-    · rename_i hlr _
-      refine .inner .leaf ‹_› ?_ (by simp [size])
-      rcases hlr with (hlr|⟨-, hlr⟩)
-      · simp only [size, Nat.zero_sub, Nat.zero_add] at hlr
-        exact Or.inl (by simp only [size]; omega)
-      · rename_i hrb _ _ _ _ _
-        simp [delta, hrb.eq, size] at hlr
-        -- omega
-    · split
-      · split
-        · split
-          · rename_i rs _ _ _ _ hrb _ _ _ ls _ _ hdel _ _ _ _ lls _ _ _ _ lrs _ _ _ _ hlb hlr _ hrat
-            have : lls + lrs ≤ delta * rs := by
-              obtain (hlr|⟨hlr, -⟩) := hlr
-              · have := hrb.pos
-                simp [size, hlb.eq] at hlr
-                omega
-              · simp [size, hlb.eq] at hlr
-                omega
-            have : delta * rs < lls + lrs + 1 := by
-              simp [hlb.eq, size] at hdel
-              omega
-            -- have hlsrs : lls + lrs = delta * rs := by omega
-            have : lls ≤ delta * lrs := by
-              obtain (hbal|⟨hbal, -⟩) := hlb.root
-              · rw [hlb.left.eq, hlb.right.eq] at hbal
-                simp [size] at hbal
-                omega
-              · simpa [size] using hbal
-            refine .inner hlb.left (.inner hlb.right hrb ?_ (by simp [size]; omega)) ?_ (by simp [size, hlb.eq]; omega)
-            · refine Or.inr ⟨?_, ?_⟩
-              · simp [size]
-                omega
-              · simp [size, delta] at *
-                omega
-            · refine Or.inr ⟨?_, ?_⟩
-              · simp [size, delta] at *
-                omega
-              · simp [size, delta, ratio] at *
-                omega
-          · rename_i rs _ _ _ _ hrb _ _ _ ls _ _ hdel _ _ _ _ lls _ _ _ _ lrs _ _ _ _ hlb hlr _ hrat
-            -- I have a pen-and-paper proof of this
-            sorry
-        · exact False.elim'
-        · exact False.elim'
-      · refine .inner ‹_› ‹_› ?_ (by simp [size])
-        rename_i hrb _ _ _ _ _ _ _ _ hlb hlr _ _
-        rcases hlr with (hlr|⟨-, hlr⟩)
-        · simp [size, delta] at *
-          refine Or.inr ⟨?_, ?_⟩
-          · rw [delta]
-            assumption
-          · rw [delta]
-            have := hlb.pos
-            have := hrb.pos
-            omega
-        · refine Or.inr ⟨?_, ?_⟩
-          · simp [size]
-            omega
-          · simp [delta] at *
-            omega -/
-
-
-
-@[inline] def balanceR (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r) : Raw α β :=
+ def balanceR (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r) (hlr : BalanceLPrecond r.size l.size) : Raw α β :=
   match l with
   | leaf => match r with
     | leaf => .inner 1 k v .leaf .leaf
@@ -338,8 +252,15 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
     | inner _ rk rv .leaf rr@(.inner _ _ _ _ _) => .inner 3 rk rv (.inner 1 k v .leaf .leaf) rr
     | inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf) (.inner 1 rk rv .leaf .leaf)
     | inner rs rk rv rl@(.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
-        if rls < ratio * rrs then .inner (1 + rs) rk rv (.inner (1 + rls) k v .leaf rl) rr
-        else .inner (1 + rs) rlk rlv (.inner (1 + rll.size) k v .leaf rll) (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+        False.elim (by
+          dsimp only [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot] at hlr
+          simp [size] at hlr
+          have := hrb.left.pos
+          have := hrb.right.pos
+          have := hrb.eq
+          simp [size] at this
+          simp only [delta] at *
+          omega)
   | inner ls _ _ _ _ => match r with
     | leaf => .inner (1 + ls) k v l .leaf
     | inner rs rk rv rl rr =>
@@ -359,14 +280,69 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
               omega)
         else .inner (1 + ls + rs) k v l r
 
+theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond r.size l.size} :
+    (balanceR k v l r hlb hrb hlr).Balanced := by
+  simp only [balanceR.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+    -- try simp [Balanced.leaf, *]
+    repeat' apply And.intro
+  all_goals
+    try apply Balanced.leaf
+    try apply False.elim'
+    try assumption
+  all_goals
+    -- omega
+    sorry
 
-@[specialize] def insert [Ord α] (k : α) (v : β k) : Raw α β → Raw α β
-| leaf => .inner 1 k v .leaf .leaf
-| inner sz ky y l r =>
+@[simp] theorem size_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalanceLPrecond r.size l.size} :
+    (balanceR k v l r hlb hrb hlr).size = 1 + l.size + r.size := by
+  simp only [balanceR.eq_def]
+  repeat' split
+  all_goals
+    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    repeat' split_and
+  all_goals
+    try apply False.elim₂
+    try omega
+
+theorem help (l r i : Nat) (h₁ : l ≤ i) (h₂ : i ≤ l + 1) (h₃ : l + r ≤ 1 ∨ (l ≤ 3 * r ∧ r ≤ 3 * l)) :
+    (i + r ≤ 1 ∨ (i ≤ 3 * r ∧ r ≤ 3 * i)) ∨ (1 ≤ i ∧ (i - 1 + r ≤ 1 ∨ (i - 1 ≤ 3 * r ∧ r ≤ 3 * (i - 1)))) := by omega
+
+theorem help' (l r i : Nat) (h₁ : r ≤ i) (h₂ : i ≤ r + 1) (h₃ : l + r ≤ 1 ∨ (l ≤ 3 * r ∧ r ≤ 3 * l)) :
+    (i + l ≤ 1 ∨ (i ≤ 3 * l ∧ l ≤ 3 * i)) ∨ (1 ≤ i ∧ (i - 1 + l ≤ 1 ∨ (i - 1 ≤ 3 * l ∧ l ≤ 3 * (i - 1)))) := by omega
+
+@[specialize] def insert [Ord α] (k : α) (v : β k) : (q : { r : Raw α β // r.Balanced }) → { r : Raw α β // r.Balanced ∧ q.1.size ≤ r.size ∧ r.size ≤ q.1.size + 1 }
+| ⟨leaf, h⟩ => ⟨.inner 1 k v .leaf .leaf, ⟨balanced_singleton, by simp, by simp⟩⟩
+| ⟨inner sz ky y l r, h⟩ =>
   match compare k ky with
-  | .lt => balanceL ky y (insert k v l) r sorry sorry sorry
-  | .eq => .inner sz k v l r
-  | .gt => balanceR ky y l (insert k v r) sorry sorry
+  | .lt =>
+      let i := insert k v ⟨l, h.left⟩
+      ⟨balanceL ky y i.1 r h.right i.2.1 (by
+          have := i.2.2.1
+          have := i.2.2.2
+          rw [balanced_inner_iff] at h
+          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, AlmostBalancedAtRoot, BalanceLPrecond] at *
+          repeat' split_and
+          apply help <;> assumption
+          ), ⟨balanced_balanceL,
+        by simp; have := i.2.2.1; have := i.2.2.2; have := h.eq; simp_all,
+        by simp; have := i.2.2.1; have := i.2.2.2; have := h.eq; simp_all; omega⟩⟩
+  | .eq => ⟨.inner sz k v l r, ⟨h.update, Nat.le_refl _, by simp⟩⟩
+  | .gt =>
+      let i := insert k v ⟨r, h.right⟩
+      ⟨balanceR ky y l i.1 h.left i.2.1 (by
+          have := i.2.2.1
+          have := i.2.2.2
+          rw [balanced_inner_iff] at h
+          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, AlmostBalancedAtRoot, BalanceLPrecond] at *
+          repeat' split_and
+          apply help' <;> assumption
+      ), ⟨balanced_balanceR,
+        by simp; have := i.2.2.1; have := i.2.2.2; have := h.eq; simp_all,
+        by simp; have := i.2.2.1; have := i.2.2.2; have := h.eq; simp_all; omega⟩⟩
 
 def insertWithoutRebalancing [Ord α] (k : α) (v : β k) : Raw α β → Raw α β
 | leaf => .inner 1 k v .leaf .leaf
@@ -524,6 +500,10 @@ theorem toList_leaf : (Raw.leaf : Raw α β).toList = [] := rfl
 theorem toList_inner {s k v l r} :
     (Raw.inner s k v l r : Raw α β).toList = l.toList ++ ⟨k, v⟩ :: r.toList := rfl
 
+@[simp]
+theorem toList_eq_nil {l : Raw α β} : l.toList = [] ↔ l = .leaf := by
+  cases l <;> simp
+
 theorem Sized.length_toList {l : Raw α β} (hl : l.Sized) : l.toList.length = l.size := by
   induction l with
   | leaf => simp
@@ -531,19 +511,40 @@ theorem Sized.length_toList {l : Raw α β} (hl : l.Sized) : l.toList.length = l
     simp only [toList_inner, List.length_append, ih₁ hl.left, List.length_cons, ih₂ hl.right, hl.eq]
     ac_rfl
 
-theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂) : (balanceR k v l r h₁ h₂).toList = (Raw.inner 0 k v l r).toList :=
+theorem False.elim₃ {h : False} {l} : (h.elim : Raw α β).toList = l :=
+  h.elim
+
+theorem bla {α : Type u} (a b : α) (l₁ l₂ : List α) : [a, b] = l₁ ++ a :: (l₂ ++ [b]) ↔ l₁ = [] ∧ l₂ = [] := by
+  cases l₁ <;> cases l₂
+  · simp
+  · simp
+  · simp
+    rintro rfl
+    apply mt (congrArg List.length)
+    simp
+  · simp
+    rintro rfl
+    apply mt (congrArg List.length)
+    simp
+    omega
+
+theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = (Raw.inner 0 k v l r).toList := by
+  rw [balanceL.eq_def]
+  repeat' split
+  all_goals simp
+  all_goals try apply False.elim₃
+  simp [bla]
   sorry
 
-theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = (Raw.inner 0 k v l r).toList :=
-  sorry
 
-theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : Raw α β} {k : α} {v : β k} :
-    (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList := by
-  apply Raw.insert.induct k v (motive := fun l => (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList)
-  · simp [insert, insertWithoutRebalancing]
-  all_goals
-    intros
-    simp_all [insert, insertWithoutRebalancing, toList_balanceL, toList_balanceR]
+theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : Raw α β} {k : α} {v : β k} {h : l.Balanced} :
+    (insert k v ⟨l, h⟩).1.toList = (l.insertWithoutRebalancing k v).toList := by
+  sorry
+  -- apply Raw.insert.induct k v (motive := fun l => (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList)
+  -- · simp [insert, insertWithoutRebalancing]
+  -- all_goals
+  --   intros
+  --   simp_all [insert, insertWithoutRebalancing, toList_balanceL, toList_balanceR]
 
 theorem toList_insertWithoutRebalancing_eq_toList_insertₘ [Ord α] {l : Raw α β} {k : α} {v : β k} :
     (l.insertWithoutRebalancing k v).toList = (l.insertₘ k v).toList := by
@@ -773,8 +774,8 @@ theorem exists_cell [Ord α] (l : Raw α β) (k : α) : ∃ (l' : List ((a : α)
   obtain ⟨l', h₁, -, h₂⟩ := exists_cell_of_update l k id
   exact ⟨l', h₁, h₂⟩
 
-theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k) (h : l.Ordered) :
-    List.Perm (toList (l.insert k v)) (insertEntry k v l.toList) := by
+theorem toList_insert [Ord α] [TransOrd α] (l : Raw α β) (k : α) (v : β k) (h : l.Ordered) (h' : l.Balanced) :
+    List.Perm (toList (Raw.insert k v ⟨l, h'⟩)) (insertEntry k v l.toList) := by
   rw [toList_insert_eq_toList_insertWithoutRebalancing,
       toList_insertWithoutRebalancing_eq_toList_insertₘ]
 
