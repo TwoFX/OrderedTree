@@ -528,23 +528,31 @@ theorem bla {α : Type u} (a b : α) (l₁ l₂ : List α) : [a, b] = l₁ ++ a 
     simp
     omega
 
-theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = (Raw.inner 0 k v l r).toList := by
+theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
   rw [balanceL.eq_def]
   repeat' split
   all_goals simp
   all_goals try apply False.elim₃
-  simp [bla]
-  sorry
+  simp_all [bla, BalanceLPrecond, BalancedAtRoot, balanced_inner_iff]
+  repeat' split_and
+  exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
 
+theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceR k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  rw [balanceR.eq_def]
+  repeat' split
+  all_goals simp
+  all_goals try apply False.elim₃
+  simp_all [bla, BalanceLPrecond, BalancedAtRoot, balanced_inner_iff]
+  repeat' split_and
+  exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
 
-theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : Raw α β} {k : α} {v : β k} {h : l.Balanced} :
-    (insert k v ⟨l, h⟩).1.toList = (l.insertWithoutRebalancing k v).toList := by
-  sorry
-  -- apply Raw.insert.induct k v (motive := fun l => (l.insert k v).toList = (l.insertWithoutRebalancing k v).toList)
-  -- · simp [insert, insertWithoutRebalancing]
-  -- all_goals
-  --   intros
-  --   simp_all [insert, insertWithoutRebalancing, toList_balanceL, toList_balanceR]
+theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : { l : Raw α β // l.Balanced}} {k : α} {v : β k} :
+    (insert k v l).1.toList = (l.1.insertWithoutRebalancing k v).toList := by
+  induction l using Raw.insert.induct k v
+  · simp [insert, insertWithoutRebalancing]
+  all_goals
+    intros
+    simp_all [insert, insertWithoutRebalancing, toList_balanceL, toList_balanceR]
 
 theorem toList_insertWithoutRebalancing_eq_toList_insertₘ [Ord α] {l : Raw α β} {k : α} {v : β k} :
     (l.insertWithoutRebalancing k v).toList = (l.insertₘ k v).toList := by
