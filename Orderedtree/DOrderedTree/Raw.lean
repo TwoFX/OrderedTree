@@ -107,12 +107,6 @@ theorem BalancedAtRoot.symm {left right : Nat} : BalancedAtRoot left right → B
 theorem balancedAtRoot_leaf_leaf : BalancedAtRoot (leaf : Raw α β).size (leaf : Raw α β).size :=
   Or.inl (by simp)
 
--- We actually want the Nat subtraction here!
-def AlmostBalancedAtRoot (left right : Nat) : Prop :=
-  delta * left ≤ delta * delta * right + delta * right + right ∧ right ≤ left
-  --   (delta * sz1 <= delta*delta*sz2 + delta*sz2 + sz2 /\ sz2 <= sz1)%Z.
-  -- (left - 1) + right ≤ 1 ∨ (left - 1 ≤ delta * right ∧ right ≤ delta * (left - 1))
-
 inductive Balanced : Raw α β → Prop
 | leaf : Balanced leaf
 | inner {size k v l r} : Balanced l → Balanced r → BalancedAtRoot l.size r.size → size = 1 + l.size + r.size → Balanced (inner size k v l r)
@@ -164,12 +158,8 @@ theorem Balanced.update {sz k k' v v' l r} : (Raw.inner sz k v l r : Raw α β).
 instance : Inhabited (Raw α β) where
   default := .leaf
 
--- abbrev BalanceLPrecond (left right : Nat) :=
---   BalancedAtRoot left right ∨ BalancedAtRoot left (right + 1) ∨ (1 ≤ left ∧ (AlmostBalancedAtRoot (left - 1) right))
-
 abbrev BalanceLPrecond (left right : Nat) :=
   BalancedAtRoot left right ∨ (1 ≤ left ∧ BalancedAtRoot (left - 1) right)
-
 
 @[inline] def balanceL (k : α) (v : β k) (l r : Raw α β) (hrb : Balanced r) (hlb : Balanced l) --(hq : BalancedAtRoot (l.size - 1) r.size)
     (hlr : BalanceLPrecond l.size r.size) : Raw α β :=
@@ -183,7 +173,7 @@ abbrev BalanceLPrecond (left right : Nat) :=
         .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
     | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) =>
         False.elim (by
-          dsimp only [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot] at hlr
+          dsimp only [BalanceLPrecond, BalancedAtRoot] at hlr
           simp [size] at hlr
           have := hlb.left.pos
           have := hlb.right.pos
@@ -235,7 +225,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   simp only [balanceL.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
     repeat' apply And.intro
   all_goals
@@ -250,7 +240,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   simp only [balanceL.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
   all_goals
     try apply False.elim₂
@@ -265,7 +255,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
     | inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf) (.inner 1 rk rv .leaf .leaf)
     | inner rs rk rv rl@(.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
         False.elim (by
-          dsimp only [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot] at hlr
+          dsimp only [BalanceLPrecond, BalancedAtRoot] at hlr
           simp [size] at hlr
           have := hrb.left.pos
           have := hrb.right.pos
@@ -297,7 +287,7 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   simp only [balanceR.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
     repeat' apply And.intro
   all_goals
@@ -312,7 +302,7 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
   simp only [balanceR.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
   all_goals
     try apply False.elim₂
@@ -353,7 +343,7 @@ theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Bala
   simp only [balanceRErase.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
     -- try simp [Balanced.leaf, *]
     repeat' apply And.intro
@@ -369,7 +359,7 @@ theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Bala
   simp only [balanceRErase.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
   all_goals
     try apply False.elim₂
@@ -412,7 +402,7 @@ theorem balanced_balanceLErase {k : α} {v : β k} {l r : Raw α β} {hrb : Bala
   simp only [balanceLErase.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
     -- try simp [Balanced.leaf, *]
     repeat' apply And.intro
@@ -428,7 +418,7 @@ theorem balanced_balanceLErase {k : α} {v : β k} {l r : Raw α β} {hrb : Bala
   simp only [balanceLErase.eq_def]
   repeat' split
   all_goals
-    simp [BalanceLPrecond, BalancedAtRoot, AlmostBalancedAtRoot, balanced_inner_iff, delta, ratio] at *
+    simp [BalanceLPrecond, BalancedAtRoot, balanced_inner_iff, delta, ratio] at *
     repeat' split_and
   all_goals
     try apply False.elim₂
@@ -450,7 +440,7 @@ theorem help' (l r i : Nat) (h₁ : r ≤ i) (h₂ : i ≤ r + 1) (h₃ : l + r 
           have := i.2.2.1
           have := i.2.2.2
           rw [balanced_inner_iff] at h
-          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, AlmostBalancedAtRoot, BalanceLPrecond] at *
+          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, BalanceLPrecond] at *
           repeat' split_and
           apply help <;> assumption
           ), ⟨balanced_balanceL,
@@ -463,7 +453,7 @@ theorem help' (l r i : Nat) (h₁ : r ≤ i) (h₂ : i ≤ r + 1) (h₃ : l + r 
           have := i.2.2.1
           have := i.2.2.2
           rw [balanced_inner_iff] at h
-          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, AlmostBalancedAtRoot, BalanceLPrecond] at *
+          simp [delta, ratio, balanced_inner_iff, BalancedAtRoot, BalanceLPrecond] at *
           repeat' split_and
           apply help' <;> assumption
       ), ⟨balanced_balanceR,
