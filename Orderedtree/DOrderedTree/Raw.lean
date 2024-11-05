@@ -519,6 +519,48 @@ def minViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
       let d := minViewRaw k' v' l' r'
       ⟨d.k, d.v, .inner (1 + d.tree.size + r.size) k v d.tree r⟩
 
+theorem minViewRaw_mem {k : α} {v : β k} {l r : Raw α β} {sz : Nat} : (minViewRaw k v l r).k ∈ (inner sz k v l r) := by
+  induction k, v, l, r using minViewRaw.induct <;> simp_all [minViewRaw]
+
+theorem of_mem_minViewRaw {k : α} {v : β k} {l r : Raw α β} {k' : α} : k' ∈ (minViewRaw k v l r).tree → k' = k ∨ k' ∈ l ∨ k' ∈ r := by
+  induction k, v, l, r using minViewRaw.induct
+  · simpa only [minViewRaw, not_mem_leaf, false_or] using Or.inr
+  · rename_i v r sz ky y l' r' ih
+    simp [minViewRaw]
+    rintro (hk'|rfl|hk')
+    · rcases ih hk' with (rfl|hk'|hk') <;> simp_all
+    · simp
+    · simp_all
+
+theorem compare_minViewRaw [Ord α] [TransOrd α] {k : α} {v : β k} {l r : Raw α β} {k' : α} (hk' : k' ∈ (minViewRaw k v l r).tree) {sz : Nat} (h : (inner sz k v l r).Ordered) : compare (minViewRaw k v l r).k k' = .lt := by
+  induction k, v, l, r using minViewRaw.induct generalizing sz
+  · simp_all [minViewRaw]
+    exact h.compare_right hk'
+  · rename_i k₀ v r sz ky y l r ih
+    simp_all [minViewRaw]
+    rcases hk' with (hk'|rfl|hk')
+    · exact ih hk' h.left
+    · sorry
+    · sorry
+
+
+theorem ordered_minViewRaw [Ord α] {k : α} {v : β k} {l r : Raw α β} (hl : l.Ordered) (hr : r.Ordered) (hlk : ∀ k' ∈ l, compare k' k = .lt) (hrk : ∀ k' ∈ r, compare k k' = .lt) :
+    Ordered (minViewRaw k v l r).tree := by
+  induction k, v, l, r using minViewRaw.induct
+  · simpa [minViewRaw]
+  · rename_i k' v' r sz ky y l r ih
+    simp only [minViewRaw]
+    refine Ordered.inner ?_ hr ?_ ?_
+    · apply ih hl.left hl.right
+      · exact fun k' hk' => hl.compare_left hk'
+      · exact fun k' hk' => hl.compare_right hk'
+    · intro k₀ hk₀
+      rcases of_mem_minViewRaw hk₀ with (rfl|hk₀|hk₀) <;> exact hlk _ (by simp_all)
+    · exact hrk
+
+theorem ordered_minViewRaw_of_ordered_inner [Ord α] {k : α} {v : β k} {l r : Raw α β} {sz: Nat} (h : (inner sz k v l r).Ordered) : (minViewRaw k v l r).tree.Ordered :=
+  ordered_minViewRaw h.left h.right (fun _ hk => h.compare_left hk) (fun _ hk => h.compare_right hk)
+
 def maxViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
   match r with
   | leaf => ⟨k, v, l⟩
@@ -777,11 +819,23 @@ theorem ordered_glueRaw [Ord α] {l r : Raw α β} (hl : l.Ordered) (hr : r.Orde
   repeat' split
   · exact hr
   · exact hl
-  · apply Ordered.inner
+  · rename_i r sz k' v' l₀ r₀ r₁ sz' k v l₂ r₂ hsz
+    apply Ordered.inner
     · exact hl
-    · sorry
-    · sorry
-    · sorry
+    · exact ordered_minViewRaw_of_ordered_inner hr
+    · simp only [mem_inner_iff]
+      rintro k₀ (hk₀|rfl|hk₀)
+      · apply hlr
+        · simp_all
+        · apply minViewRaw_mem
+      · apply hlr
+        · simp_all
+        · apply minViewRaw_mem
+      · apply hlr
+        · simp_all
+        · apply minViewRaw_mem
+    · intro k₀ hk₀
+      sorry
   · apply Ordered.inner
     · sorry
     · exact hr
