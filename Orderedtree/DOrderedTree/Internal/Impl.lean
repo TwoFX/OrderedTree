@@ -352,14 +352,14 @@ structure RawView where
   tree : Impl α β
 
 variable (α β) in
-/-- A tuple of a key-value pair and a balanced tree of size `n`. -/
-structure View (n : Nat) where
+/-- A tuple of a key-value pair and a balanced tree of size `size`. -/
+structure View (size : Nat) where
   /-- The tuple. -/
   raw : RawView α β
   /-- The tree is balanced. -/
   balanced_tree : raw.tree.Balanced
-  /-- The tree has size n. -/
-  size_tree : raw.tree.size = n
+  /-- The tree has size `size`. -/
+  size_tree : raw.tree.size = size
 
 attribute [tree_tac] View.balanced_tree View.size_tree
 
