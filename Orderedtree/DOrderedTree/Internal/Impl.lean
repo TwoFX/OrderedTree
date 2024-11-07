@@ -3,13 +3,14 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
+import Orderedtree.DOrderedTree.Internal.Impl.Attr
 import Lean.Elab.Tactic
 
 /-!
 # Low-level implementation of the size-bounded tree
 
 This file contains the basic definition implementing the functionality of the size-bounded trees.
-As
+Asaaa
 -/
 
 set_option autoImplicit false
@@ -30,12 +31,12 @@ inductive Impl (α : Type u) (β : α → Type v) where
   deriving Inhabited
 
 /-- The "delta" parameter of the size-bounded tree. Controls how imbalanced the tree can be. -/
-@[inline]
+@[inline, tree_tac]
 def delta : Nat := 3
 
 /-- The "ratio" parameter of the size-bounded tree. Controls how aggressive the rebalancing
 operations are. -/
-@[inline]
+@[inline, tree_tac]
 def ratio : Nat := 2
 
 namespace Impl
@@ -46,11 +47,12 @@ def size : Impl α β → Nat
   | inner sz _ _ _ _ => sz
   | leaf => 0
 
-@[simp] theorem size_leaf : (Impl.leaf : Impl α β).size = 0 := rfl
-@[simp] theorem size_inner {sz k v l r} : (Impl.inner sz k v l r : Impl α β).size = sz := rfl
+@[tree_tac] theorem size_leaf : (Impl.leaf : Impl α β).size = 0 := rfl
+@[tree_tac] theorem size_inner {sz k v l r} : (Impl.inner sz k v l r : Impl α β).size = sz := rfl
 
 /-- Predicate for local balance at a node of the tree. We don't provide API for this, preferring
 instead to use automation to dispatch goals about balance. -/
+@[tree_tac]
 def BalancedAtRoot (left right : Nat) : Prop :=
   left + right ≤ 1 ∨ (left ≤ delta * right ∧ right ≤ delta * left)
 
@@ -64,9 +66,9 @@ inductive Balanced : Impl α β → Prop where
   | inner {sz k v l r} : Balanced l → Balanced r →
       BalancedAtRoot l.size r.size → sz = l.size + 1 + r.size → Balanced (inner sz k v l r)
 
-attribute [simp] Balanced.leaf
+attribute [tree_tac] Balanced.leaf
 
-@[simp]
+@[tree_tac]
 theorem balanced_inner_iff {sz k v l r} : Balanced (Impl.inner sz k v l r : Impl α β) ↔
     Balanced l ∧ Balanced r ∧ BalancedAtRoot l.size r.size ∧ sz = l.size + 1 + r.size :=
   ⟨by rintro (_|⟨h₁, h₂, h₃, h₄⟩); exact ⟨h₁, h₂, h₃, h₄⟩,
@@ -77,6 +79,7 @@ theorem balanced_inner_iff {sz k v l r} : Balanced (Impl.inner sz k v l r : Impl
 -/
 
 /-- Precondition for `balanceL`: at most one element was added to left subtree. -/
+@[tree_tac]
 abbrev BalanceLPrecond (left right : Nat) :=
   BalancedAtRoot left right ∨ (1 ≤ left ∧ BalancedAtRoot (left - 1) right)
 
@@ -98,8 +101,7 @@ elab "split_and" : tactic => liftMetaTactic fun mvarId => do
 macro "tree_tac" : tactic => `(tactic|(
   repeat' split
   all_goals
-    simp only [BalancedAtRoot, BalanceLPrecond, delta, ratio, size_leaf, size_inner,
-      balanced_inner_iff, Balanced.leaf] at *
+    simp only [tree_tac] at *
     repeat' split_and
     repeat' apply And.intro
   all_goals
@@ -112,7 +114,7 @@ macro "tree_tac" : tactic => `(tactic|(
 end
 
 /-!
-### `balanceL`
+### `balanceL` variants
 -/
 
 /-- Rebalances a tree after at most one element was added to the left subtree. Uses balancing
@@ -143,18 +145,88 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
           | _, leaf => False.elim (by tree_tac)
         else .inner (1 + ls + rs) k v l r
 
-@[simp]
+@[tree_tac]
 theorem size_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceL k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balanceL.eq_def]; tree_tac
 
-@[simp]
+@[tree_tac]
 theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceL k v l r hrb hlb hlr).Balanced := by
   simp only [balanceL.eq_def]; tree_tac
 
+/-- Slower version of `balanceL` with weaker balancing assumptions that hold after erasing from
+the right side of the tree. -/
+@[inline] def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Balanced r)
+    (hlr : BalancedAtRoot l.size (r.size + 1) ∨ BalancedAtRoot l.size r.size) : Impl α β :=
+  match r with
+  | leaf => match l with
+    | leaf => .inner 1 k v .leaf .leaf
+    | inner _ _ _ .leaf .leaf => .inner 2 k v l .leaf
+    | inner _ lk lv .leaf (.inner _ lrk lrv _ _) =>
+        .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf) (.inner 1 k v .leaf .leaf)
+    | inner _ lk lv ll@(.inner _ _ _ _ _) .leaf =>
+        .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
+    | inner ls lk lv ll@(.inner lls _ _ _ _) lr@(.inner lrs lrk lrv lrl lrr) =>
+        if lrs < ratio * lls then .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v lr .leaf)
+        else .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+          (.inner (1 + lrr.size) k v lrr .leaf)
+  | (inner rs _ _ _ _) => match l with
+    | leaf => .inner (1 + rs) k v .leaf r
+    | inner ls lk lv ll lr =>
+        if hlsd : ls > delta * rs then match ll, lr with
+          | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
+              if lrs < ratio * lls then
+                .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+              else
+                .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+                  (.inner (1 + rs + lrr.size) k v lrr r)
+          | leaf, _ => False.elim (by tree_tac)
+          | _, leaf => False.elim (by tree_tac)
+        else .inner (1 + ls + rs) k v l r
+
+@[tree_tac]
+theorem size_balanceLErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balanceLErase k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
+  simp only [balanceLErase.eq_def]; tree_tac
+
+@[tree_tac]
+theorem balanced_balanceLErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balanceLErase k v l r hrb hlb hlr).Balanced := by
+  simp only [balanceLErase.eq_def]; tree_tac
+
+/-- Slow version of `balanceL` which can be used in the complete absence of balancing information
+but still assumes that the preconditions of `balanceL` or `balanceL` are satisfied
+(otherwise panics). -/
+@[inline] def balanceLSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
+  match r with
+  | leaf => match l with
+    | leaf => .inner 1 k v .leaf .leaf
+    | inner _ _ _ .leaf .leaf => .inner 2 k v l .leaf
+    | inner _ lk lv .leaf (.inner _ lrk lrv _ _) =>
+        .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf) (.inner 1 k v .leaf .leaf)
+    | inner _ lk lv ll@(.inner _ _ _ _ _) .leaf =>
+        .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
+    | inner ls lk lv ll@(.inner lls _ _ _ _) lr@(.inner lrs lrk lrv lrl lrr) =>
+        if lrs < ratio * lls then .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v lr .leaf)
+        else .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+          (.inner (1 + lrr.size) k v lrr .leaf)
+  | (inner rs _ _ _ _) => match l with
+    | leaf => .inner (1 + rs) k v .leaf r
+    | inner ls lk lv ll lr =>
+        if ls > delta * rs then match ll, lr with
+          | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
+              if lrs < ratio * lls then
+                .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+              else
+                .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+                  (.inner (1 + rs + lrr.size) k v lrr r)
+          | leaf, _ => panic! "balanceLSlow input was not balanced"
+          | _, leaf => panic! "balanceLSlow input was not balanced"
+        else .inner (1 + ls + rs) k v l r
+
 /-!
-### `balanceR`
+### `balanceR` variants
 -/
 
 /-- Rebalances a tree after at most one element was added to the right subtree. Uses balancing
@@ -185,12 +257,12 @@ def balanceR (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
           | _, leaf => False.elim (by tree_tac)
         else .inner (1 + ls + rs) k v l r
 
-@[simp]
+@[tree_tac]
 theorem size_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceR k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balanceR.eq_def]; tree_tac
 
-@[simp]
+@[tree_tac]
 theorem balanced_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceR k v l r hrb hlb hlr).Balanced := by
   simp only [balanceR.eq_def]; tree_tac
@@ -225,12 +297,12 @@ def balanceRErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
           | _, leaf => False.elim (by tree_tac)
         else .inner (1 + ls + rs) k v l r
 
-@[simp]
+@[tree_tac]
 theorem size_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceRErase k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balanceRErase.eq_def]; tree_tac
 
-@[simp]
+@[tree_tac]
 theorem balanced_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceRErase k v l r hrb hlb hlr).Balanced := by
   simp only [balanceRErase.eq_def]; tree_tac
@@ -239,7 +311,7 @@ theorem balanced_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb h
 but still assumes that the preconditions of `balanceR` or `balanceRErase` are satisfied
 (otherwise panics). -/
 @[inline]
-def balanceRSlow (k : α) (v : β k) (l r : Impl α β)  : Impl α β :=
+def balanceRSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
   match l with
   | leaf => match r with
     | leaf => .inner 1 k v .leaf .leaf
@@ -264,6 +336,76 @@ def balanceRSlow (k : α) (v : β k) (l r : Impl α β)  : Impl α β :=
           | leaf, _ => panic! "balanceRSlow input was not balanced"
           | _, leaf => panic! "balanceRSlow input was not balanced"
         else .inner (1 + ls + rs) k v l r
+
+/-!
+## `minView` and `maxView`
+-/
+
+variable (α β) in
+/-- A tuple of a key-value pair and a tree. -/
+structure RawView where
+  /-- The key. -/
+  k : α
+  /-- The value. -/
+  v : β k
+  /-- The tree. -/
+  tree : Impl α β
+
+variable (α β) in
+/-- A tuple of a key-value pair and a balanced tree of size `n`. -/
+structure View (n : Nat) where
+  /-- The tuple. -/
+  raw : RawView α β
+  /-- The tree is balanced. -/
+  balanced_tree : raw.tree.Balanced
+  /-- The tree has size n. -/
+  size_tree : raw.tree.size = n
+
+attribute [tree_tac] View.balanced_tree View.size_tree
+
+/-- Returns the tree `l ++ ⟨k, v⟩ ++ r`, with the smallest element chopped off. -/
+def minView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
+    (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
+  match l with
+  | leaf => ⟨⟨k, v, r⟩, hr, by tree_tac⟩
+  | inner _ k' v' l' r' =>
+      let d := minView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
+      ⟨⟨d.raw.k, d.raw.v, balanceRErase k v d.raw.tree r (by tree_tac) (by tree_tac)
+            (by simp only [tree_tac] at hl; tree_tac)⟩,
+          by tree_tac, by simp only [tree_tac] at hl; tree_tac⟩
+
+/-- Slow version of `minView` which can be used in the absence of balance information but still
+assumes the preconditions of `minView`, otherwise might panic. -/
+def minViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
+  match l with
+  | leaf => ⟨k, v, r⟩
+  | inner _ k' v' l' r' =>
+      let d := minViewSlow k' v' l' r'
+      ⟨d.k, d.v, balanceRSlow k v d.tree r⟩
+
+/-- Returns the tree `l ++ ⟨k, v⟩ ++ r`, with the largest element chopped off. -/
+def maxView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
+    (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
+  match r with
+  | leaf => ⟨⟨k, v, l⟩, hl, by tree_tac⟩
+  | inner _ k' v' l' r' =>
+      let d := maxView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
+      ⟨⟨d.raw.k, d.raw.v, balanceLErase k v l d.raw.tree (by tree_tac) (by tree_tac)
+            (by simp only [tree_tac] at hr; tree_tac)⟩,
+          by tree_tac, by simp only [tree_tac] at hr; tree_tac⟩
+
+/-- Slow version of `maxView` which can be used in the absence of balance information but still
+assumes the preconditions of `maxView`, otherwise might panic. -/
+def maxViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
+  match r with
+  | leaf => ⟨k, v, l⟩
+  | inner _ k' v' l' r' =>
+      let d := maxViewSlow k' v' l' r'
+      ⟨d.k, d.v, balanceLSlow k v l d.tree⟩
+
+/-!
+## `glue`
+-/
 
 end Impl
 
