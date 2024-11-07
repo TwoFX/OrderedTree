@@ -309,7 +309,7 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
     try omega
 
 /-- Slower version of `balanceR` that has to handle additional cases. -/
-@[inline] def balanceRErase (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r) (hlr : BalancedAtRoot (1 + l.size) r.size) : Raw α β :=
+@[inline] def balanceRErase (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r) (hlr : BalancedAtRoot (1 + l.size) r.size ∨ BalancedAtRoot l.size r.size) : Raw α β :=
   match l with
   | leaf => match r with
     | leaf => .inner 1 k v .leaf .leaf
@@ -338,7 +338,7 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced 
               omega)
         else .inner (1 + ls + rs) k v l r
 
-theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr : BalancedAtRoot (1 + l.size) r.size} :
+theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Balanced r} {hlb : Balanced l} {hlr} :
     (balanceRErase k v l  r hlb hrb hlr).Balanced := by
   simp only [balanceRErase.eq_def]
   repeat' split
@@ -366,7 +366,7 @@ theorem balanced_balanceRErase {k : α} {v : β k} {l r : Raw α β} {hrb : Bala
     try omega
 
 @[inline] def balanceLErase (k : α) (v : β k) (l r : Raw α β) (hlb : Balanced l) (hrb : Balanced r)
-    (hlr : BalancedAtRoot l.size (r.size + 1)) : Raw α β :=
+    (hlr : BalancedAtRoot l.size (r.size + 1) ∨ BalancedAtRoot l.size r.size) : Raw α β :=
   match r with
   | leaf => match l with
     | leaf => .inner 1 k v .leaf .leaf
@@ -469,27 +469,34 @@ def insertWithoutRebalancing [Ord α] (k : α) (v : β k) : Raw α β → Raw α
   | .gt => .inner (sz + 1) ky y l (insertWithoutRebalancing k v r)
 
 variable (α β) in
-structure View (n : Nat) where
+structure RawView where
   k : α
   v : β k
   tree : Raw α β
-  balanced : tree.Balanced
-  hsz : tree.size = n
+
+def RawView.p : RawView α β → (k : α) × β k
+  | ⟨k, v, _⟩ => ⟨k, v⟩
+
+variable (α β) in
+structure View (n : Nat) where
+  raw : RawView α β
+  balanced : raw.tree.Balanced
+  hsz : raw.tree.size = n
 
 def minView (k : α) (v : β k) (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match l with
-  | leaf => ⟨k, v, r, hr, by simp⟩
+  | leaf => ⟨⟨k, v, r⟩, hr, by simp⟩
   | inner _ k' v' l' r' =>
       let d := minView k' v' l' r' hl.left hl.right hl.root
-      ⟨d.k, d.v, balanceRErase k v d.tree r d.balanced hr (by rwa [hl.eq, size_inner, Nat.add_assoc, ← d.hsz] at h),
+      ⟨⟨d.raw.p.1, d.raw.p.2, balanceRErase k v d.raw.tree r d.balanced hr (Or.inl <| by rwa [hl.eq, size_inner, Nat.add_assoc, ← d.hsz] at h)⟩,
         balanced_balanceRErase, by simp [hl.eq, d.hsz, Nat.add_assoc]⟩
 
 def maxView (k : α) (v : β k) (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match r with
-  | leaf => ⟨k, v, l, hl, by simp⟩
+  | leaf => ⟨⟨k, v, l⟩, hl, by simp⟩
   | inner _ k' v' l' r' =>
       let d := maxView k' v' l' r' hr.left hr.right hr.root
-      ⟨d.k, d.v, balanceLErase k v l d.tree hl d.balanced (by rwa [hr.eq, size_inner, Nat.add_assoc, ← d.hsz, Nat.add_comm] at h),
+      ⟨⟨d.raw.k, d.raw.v, balanceLErase k v l d.raw.tree hl d.balanced (Or.inl <| by rwa [hr.eq, size_inner, Nat.add_assoc, ← d.hsz, Nat.add_comm] at h)⟩,
         balanced_balanceLErase, by simp [hr.eq, d.hsz]; omega⟩
 
 def glue (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRoot l.size r.size) : Raw α β :=
@@ -501,35 +508,74 @@ def glue (l r : Raw α β) (hl : l.Balanced) (hr : r.Balanced) (h : BalancedAtRo
     | r@hr₀:(.inner sz' k' v' l'' r'') =>
       if sz < sz' then
         let d := minView k' v' l'' r'' hr.left hr.right hr.root
-        balanceLErase d.k d.v l d.tree (hl₀ ▸ hl) d.balanced (by simp [hl.eq, hr.eq] at h; simp [hl₀, hl.eq, d.hsz]; rwa [Nat.add_comm _ 1, ← Nat.add_assoc])
+        balanceLErase d.raw.p.1 d.raw.p.2 l d.raw.tree (hl₀ ▸ hl) d.balanced (Or.inl <| by simp [hl.eq, hr.eq] at h; simp [hl₀, hl.eq, d.hsz]; rwa [Nat.add_comm _ 1, ← Nat.add_assoc])
       else
         let d := maxView k v l' r' hl.left hl.right hl.root
-        balanceRErase d.k d.v d.tree r d.balanced (hr₀ ▸ hr) (by simp [hl.eq, hr.eq] at h; simp [hr₀, hr.eq, d.hsz]; rwa [← Nat.add_assoc])
+        balanceRErase d.raw.p.1 d.raw.p.2 d.raw.tree r d.balanced (hr₀ ▸ hr) (Or.inl <| by simp [hl.eq, hr.eq] at h; simp [hr₀, hr.eq, d.hsz]; rwa [← Nat.add_assoc])
 
-variable (α β) in
-structure RawView where
-  k : α
-  v : β k
-  tree : Raw α β
+theorem balanced_glue {l r : Raw α β} {hl hr h} : (glue l r hl hr h).Balanced := by
+  simp only [glue]
+  repeat' split
+  · assumption
+  · assumption
+  · exact balanced_balanceLErase
+  · exact balanced_balanceRErase
+
+@[simp]
+theorem size_glue {l r : Raw α β} {hl hr h} : (glue l r hl hr h).size = l.size + r.size := by
+  simp only [glue]
+  repeat' split
+  · simp
+  · simp
+  · sorry
+  · sorry
+
+def erase [Ord α] (l : Raw α β) (k : α) (h : l.Balanced) : { m : Raw α β // m.Balanced ∧ (m.size = l.size ∨ m.size + 1 = l.size) } :=
+  match l with
+  | leaf => ⟨.leaf, Balanced.leaf, by simp⟩
+  | inner sz k' v' l r =>
+    match compare k k' with
+    | .lt => sorry
+    | .gt => sorry
+    | .eq => ⟨glue l r h.left h.right h.root, balanced_glue, by simp [h.eq]; ac_rfl⟩
+
 
 def minViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
   match l with
   | leaf => ⟨k, v, r⟩
   | inner _ k' v' l' r' =>
       let d := minViewRaw k' v' l' r'
-      ⟨d.k, d.v, .inner (1 + d.tree.size + r.size) k v d.tree r⟩
+      ⟨d.p.1, d.p.2, .inner (1 + d.tree.size + r.size) k v d.tree r⟩
 
 @[simp]
 theorem toList_minViewRaw_tree {k : α} {v : β k} {l r : Raw α β} :
-    ⟨(minViewRaw k v l r).k, (minViewRaw k v l r).v⟩ :: (minViewRaw k v l r).tree.toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
+    ⟨(minViewRaw k v l r).p.1, (minViewRaw k v l r).p.2⟩ :: (minViewRaw k v l r).tree.toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
   induction k, v, l, r using minViewRaw.induct
-  · simp [minViewRaw]
-  · rename_i k' v' u sz ky y l r ih
+  · simp [minViewRaw, RawView.p]
+  · rename_i ih
     simp only [minViewRaw, toList_inner]
-    rw [← List.cons_append, ih]
+    rw [← List.cons_append]
+    simp only [RawView.p] at ih
+    simp [RawView.p, ih]
 
-theorem minViewRaw_mem {k : α} {v : β k} {l r : Raw α β} {sz : Nat} : (minViewRaw k v l r).k ∈ inner sz k v l r := by
-  induction k, v, l, r using minViewRaw.induct <;> simp_all [minViewRaw]
+def maxViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
+  match r with
+  | leaf => ⟨k, v, l⟩
+  | inner _ k' v' l' r' =>
+      let d := maxViewRaw k' v' l' r'
+      ⟨d.k, d.v, .inner (1 + l.size + d.tree.size) k v l d.tree⟩
+
+@[simp]
+theorem toList_maxViewRaw_tree {k : α} {v : β k} {l r : Raw α β} :
+    (maxViewRaw k v l r).tree.toList ++ [⟨(maxViewRaw k v l r).p.1, (maxViewRaw k v l r).p.2⟩] = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  induction k, v, l, r using maxViewRaw.induct
+  · simp_all [maxViewRaw, RawView.p]
+  · rename_i ih
+    simp only [RawView.p] at ih
+    simp [RawView.p, ih, maxViewRaw]
+
+theorem minViewRaw_mem {k : α} {v : β k} {l r : Raw α β} {sz : Nat} : (minViewRaw k v l r).p.1 ∈ inner sz k v l r := by
+  induction k, v, l, r using minViewRaw.induct <;> simp_all [minViewRaw, RawView.p]
 
 theorem of_mem_minViewRaw {k : α} {v : β k} {l r : Raw α β} {k' : α} : k' ∈ (minViewRaw k v l r).tree → k' = k ∨ k' ∈ l ∨ k' ∈ r := by
   induction k, v, l, r using minViewRaw.induct
@@ -568,13 +614,6 @@ theorem ordered_minViewRaw [Ord α] {k : α} {v : β k} {l r : Raw α β} (hl : 
 
 theorem ordered_minViewRaw_of_ordered_inner [Ord α] {k : α} {v : β k} {l r : Raw α β} {sz: Nat} (h : (inner sz k v l r).Ordered) : (minViewRaw k v l r).tree.Ordered :=
   ordered_minViewRaw h.left h.right (fun _ hk => h.compare_left hk) (fun _ hk => h.compare_right hk)
-
-def maxViewRaw (k : α) (v : β k) (l r : Raw α β) : RawView α β :=
-  match r with
-  | leaf => ⟨k, v, l⟩
-  | inner _ k' v' l' r' =>
-      let d := maxViewRaw k' v' l' r'
-      ⟨d.k, d.v, .inner (1 + l.size + d.tree.size) k v l d.tree⟩
 
 theorem maxViewRaw_mem {k : α} {v : β k} {l r : Raw α β} {sz : Nat} : (maxViewRaw k v l r).k ∈ inner sz k v l r := by
   induction k, v, l, r using maxViewRaw.induct <;> simp_all [maxViewRaw]
@@ -626,10 +665,10 @@ def glueRaw (l r : Raw α β) : Raw α β :=
     | r@(.inner sz' k' v' l'' r'') =>
       if sz < sz' then
         let d := minViewRaw k' v' l'' r''
-        .inner (1 + l.size + d.tree.size) d.k d.v l d.tree
+        .inner (1 + l.size + d.tree.size) d.p.1 d.p.2 l d.tree
       else
         let d := maxViewRaw k v l' r'
-        .inner (1 + d.tree.size + r.size) d.k d.v d.tree r
+        .inner (1 + d.tree.size + r.size) d.p.1 d.p.2 d.tree r
 
 def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : Raw α β → Raw α β
 | leaf => match f none with
@@ -792,6 +831,7 @@ theorem bla {α : Type u} (a b : α) (l₁ l₂ : List α) : [a, b] = l₁ ++ a 
     simp
     omega
 
+@[simp]
 theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceL k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
   rw [balanceL.eq_def]
   repeat' split
@@ -801,6 +841,17 @@ theorem toList_balanceL (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) :
   repeat' split_and
   exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
 
+@[simp]
+theorem toList_balanceLErase (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceLErase k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  rw [balanceLErase.eq_def]
+  repeat' split
+  all_goals simp
+  all_goals try apply False.elim₃
+  simp_all [bla, BalanceLPrecond, BalancedAtRoot, balanced_inner_iff]
+  repeat' split_and
+  exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
+
+@[simp]
 theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceR k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
   rw [balanceR.eq_def]
   repeat' split
@@ -809,6 +860,55 @@ theorem toList_balanceR (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) :
   simp_all [bla, BalanceLPrecond, BalancedAtRoot, balanced_inner_iff]
   repeat' split_and
   exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
+
+@[simp]
+theorem toList_balanceRErase (k : α) (v : β k) (l r : Raw α β) (h₁ h₂ h₃) : (balanceRErase k v l r h₁ h₂ h₃).toList = l.toList ++ ⟨k, v⟩ :: r.toList := by
+  rw [balanceRErase.eq_def]
+  repeat' split
+  all_goals simp
+  all_goals try apply False.elim₃
+  simp_all [bla, BalanceLPrecond, BalancedAtRoot, balanced_inner_iff]
+  repeat' split_and
+  exact ⟨Balanced.size_eq_zero ‹_› (by omega), Balanced.size_eq_zero ‹_› (by omega)⟩
+
+@[simp]
+theorem minView_raw_tree_toList {k : α} {v : β k} {l r : Raw α β} {hl hr hlr} : (minView k v l r hl hr hlr).raw.tree.toList = (minViewRaw k v l r).tree.toList := by
+  induction k, v, l, r using minViewRaw.induct
+  · simp [minView, minViewRaw]
+  · rename_i k' v' r size k'' v'' l' r' ih
+    simp [minView, minViewRaw, ih]
+
+@[simp]
+theorem minView_raw_p {k : α} {v : β k} {l r : Raw α β} {hl hr hlr} : (minView k v l r hl hr hlr).raw.p = (minViewRaw k v l r).p := by
+  induction k, v, l, r using minViewRaw.induct
+  · simp [minView, minViewRaw]
+  · rename_i k' v' r size k'' v'' l' r' ih
+    simp [minView, minViewRaw, ih, RawView.p]
+    exact ih
+
+@[simp]
+theorem maxView_raw_tree_toList {k : α} {v : β k} {l r : Raw α β} {hl hr hlr} : (maxView k v l r hl hr hlr).raw.tree.toList = (maxViewRaw k v l r).tree.toList := by
+  induction k, v, l, r using maxViewRaw.induct
+  · simp [maxView, maxViewRaw]
+  · rename_i k' v' r size k'' v'' l' r' ih
+    simp [maxView, maxViewRaw, ih]
+
+@[simp]
+theorem maxView_raw_p {k : α} {v : β k} {l r : Raw α β} {hl hr hlr} : (maxView k v l r hl hr hlr).raw.p = (maxViewRaw k v l r).p := by
+  induction k, v, l, r using maxViewRaw.induct
+  · simp [maxView, maxViewRaw]
+  · rename_i k' v' r size k'' v'' l' r' ih
+    simp [maxView, maxViewRaw, ih, RawView.p]
+    exact ih
+
+@[simp]
+theorem toList_glue_eq_toList_glueRaw {l r : Raw α β} {h₁ h₂ h₃} : (glue l r h₁ h₂ h₃).toList = (glueRaw l r).toList := by
+  simp only [glue, glueRaw]
+  cases l <;> cases r <;> simp <;> split
+  · rw [minView_raw_p]
+    simp
+  · simp
+    rw [maxView_raw_p]
 
 theorem toList_insert_eq_toList_insertWithoutRebalancing [Ord α] {l : { l : Raw α β // l.Balanced}} {k : α} {v : β k} :
     (insert k v l).1.toList = (l.1.insertWithoutRebalancing k v).toList := by
@@ -822,11 +922,6 @@ theorem toList_insertWithoutRebalancing_eq_toList_insertₘ [Ord α] {l : Raw α
     (l.insertWithoutRebalancing k v).toList = (l.insertₘ k v).toList := by
   induction l using Raw.insertWithoutRebalancing.induct k v
     <;> simp_all [insertWithoutRebalancing, insertₘ, updateAtKey]
-
-@[simp]
-theorem toList_maxViewRaw_tree {k : α} {v : β k} {l r : Raw α β} :
-    (maxViewRaw k v l r).tree.toList ++ [⟨(maxViewRaw k v l r).k, (maxViewRaw k v l r).v⟩] = l.toList ++ ⟨k, v⟩ :: r.toList := by
-  induction k, v, l, r using maxViewRaw.induct <;> simp_all [maxViewRaw]
 
 @[simp]
 theorem toList_glueRaw {l r : Raw α β} : (glueRaw l r).toList = l.toList ++ r.toList := by

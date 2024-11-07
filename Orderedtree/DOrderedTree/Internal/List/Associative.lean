@@ -126,10 +126,6 @@ variable [Ord α]
 
 -- TODO: mark Ordering.isLE as @[inline]
 
-/-- Minimum as implemented via `Ord`. -/
-def Ord.min {a b : α} : α :=
-  if (compare a b).isLE then a else b
-
 /-- `a == b` is defined as `compare a b == .eq`. -/
 def beqOfOrd : BEq α where
   beq a b := compare a b == .eq
@@ -262,6 +258,7 @@ theorem lt_of_lt_of_le [TransOrd α] {a b c : α} : a < b → b ≤ c → a < c 
   rcases le_iff_lt_or_beq.1 hbc with (hbc|hbc)
   · exact lt_trans hab hbc
   · exact lt_of_lt_of_beq hab hbc
+
 
 -- local instance : Min α where
 --   min a b := if a ≤ b then a else b
