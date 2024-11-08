@@ -86,8 +86,7 @@ abbrev BalanceLPrecond (left right : Nat) :=
 /-- Precondition for `balanceLErase`. As Breitner et al. remark, "not very educational". -/
 @[tree_tac]
 abbrev BalanceLErasePrecond (left right : Nat) :=
-  (1 ≤ left ∧
-      delta * left ≤ delta * delta * right + delta * right + right + delta ∧ right + 1 ≤ left) ∨
+  (delta * left ≤ delta * delta * right + delta * right + right + delta ∧ right + 1 ≤ left) ∨
     BalancedAtRoot left (right + 1) ∨ BalancedAtRoot left right
 
 section
@@ -586,7 +585,7 @@ def link2Slow (l r : Impl α β) : Impl α β :=
   termination_by sizeOf l + sizeOf r
 
 /-!
-### `insert`, 
+### `insert`,
 -/
 
 end Impl
