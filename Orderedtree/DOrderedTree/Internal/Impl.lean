@@ -83,6 +83,13 @@ theorem balanced_inner_iff {sz k v l r} : Balanced (Impl.inner sz k v l r : Impl
 abbrev BalanceLPrecond (left right : Nat) :=
   BalancedAtRoot left right ∨ (1 ≤ left ∧ BalancedAtRoot (left - 1) right)
 
+/-- Precondition for `balanceLErase`. As Breitner et al. remark, "not very educational". -/
+@[tree_tac]
+abbrev BalanceLErasePrecond (left right : Nat) :=
+  (1 ≤ left ∧
+      delta * left ≤ delta * delta * right + delta * right + right + delta ∧ right + 1 ≤ left) ∨
+    BalancedAtRoot left (right + 1) ∨ BalancedAtRoot left right
+
 section
 
 open Lean Meta Elab Tactic
@@ -99,9 +106,12 @@ elab "split_and" : tactic => liftMetaTactic fun mvarId => do
 
 /-- (Implementation detail) -/
 macro "tree_tac" : tactic => `(tactic|(
+  subst_eqs
   repeat' split
   all_goals
-    simp only [tree_tac] at *
+    try simp only [tree_tac] at *
+  all_goals
+    try simp only [tree_tac] at *
     repeat' split_and
     repeat' apply And.intro
   all_goals
@@ -158,7 +168,7 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
 /-- Slower version of `balanceL` with weaker balancing assumptions that hold after erasing from
 the right side of the tree. -/
 @[inline] def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Balanced r)
-    (hlr : BalancedAtRoot l.size (r.size + 1) ∨ BalancedAtRoot l.size r.size) : Impl α β :=
+    (hlr : BalanceLErasePrecond l.size r.size) : Impl α β :=
   match r with
   | leaf => match l with
     | leaf => .inner 1 k v .leaf .leaf
@@ -271,7 +281,7 @@ theorem balanced_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
 the left side of the tree. -/
 @[inline]
 def balanceRErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Balanced r)
-    (hlr : BalancedAtRoot (1 + l.size) r.size ∨ BalancedAtRoot l.size r.size) : Impl α β :=
+    (hlr : BalanceLErasePrecond r.size l.size) : Impl α β :=
   match l with
   | leaf => match r with
     | leaf => .inner 1 k v .leaf .leaf
@@ -352,27 +362,37 @@ structure RawView where
   tree : Impl α β
 
 variable (α β) in
+/-- A balanced tree of the given size. -/
+structure Tree (size : Nat) where
+  /-- The tree. -/
+  impl : Impl α β
+  /-- The tree is balanced. -/
+  balanced_impl : impl.Balanced
+  /-- The tree has size `size`. -/
+  size_impl : impl.size = size
+
+variable (α β) in
 /-- A tuple of a key-value pair and a balanced tree of size `size`. -/
 structure View (size : Nat) where
-  /-- The tuple. -/
-  raw : RawView α β
-  /-- The tree is balanced. -/
-  balanced_tree : raw.tree.Balanced
-  /-- The tree has size `size`. -/
-  size_tree : raw.tree.size = size
+  /-- The key. -/
+  k : α
+  /-- The value. -/
+  v : β k
+  /-- The tree. -/
+  tree : Tree α β size
 
-attribute [tree_tac] View.balanced_tree View.size_tree
+attribute [tree_tac] Tree.balanced_impl Tree.size_impl
 
 /-- Returns the tree `l ++ ⟨k, v⟩ ++ r`, with the smallest element chopped off. -/
 def minView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
     (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match l with
-  | leaf => ⟨⟨k, v, r⟩, hr, by tree_tac⟩
+  | leaf => ⟨k, v, ⟨r, hr, by tree_tac⟩⟩
   | inner _ k' v' l' r' =>
       let d := minView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
-      ⟨⟨d.raw.k, d.raw.v, balanceRErase k v d.raw.tree r (by tree_tac) (by tree_tac)
-            (by simp only [tree_tac] at hl; tree_tac)⟩,
-          by tree_tac, by simp only [tree_tac] at hl; tree_tac⟩
+      ⟨d.k, d.v, ⟨balanceRErase k v d.tree.impl r (by tree_tac) (by tree_tac)
+            (by simp only [tree_tac] at hl; tree_tac),
+          by tree_tac, by simp only [tree_tac] at hl; tree_tac⟩⟩
 
 /-- Slow version of `minView` which can be used in the absence of balance information but still
 assumes the preconditions of `minView`, otherwise might panic. -/
@@ -387,12 +407,12 @@ def minViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
 def maxView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
     (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match r with
-  | leaf => ⟨⟨k, v, l⟩, hl, by tree_tac⟩
+  | leaf => ⟨k, v, ⟨l, hl, by tree_tac⟩⟩
   | inner _ k' v' l' r' =>
       let d := maxView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
-      ⟨⟨d.raw.k, d.raw.v, balanceLErase k v l d.raw.tree (by tree_tac) (by tree_tac)
-            (by simp only [tree_tac] at hr; tree_tac)⟩,
-          by tree_tac, by simp only [tree_tac] at hr; tree_tac⟩
+      ⟨d.k, d.v, ⟨balanceLErase k v l d.tree.impl (by tree_tac) (by tree_tac)
+            (by simp only [tree_tac] at hr; tree_tac),
+          by tree_tac, by simp only [tree_tac] at hr; tree_tac⟩⟩
 
 /-- Slow version of `maxView` which can be used in the absence of balance information but still
 assumes the preconditions of `maxView`, otherwise might panic. -/
@@ -405,6 +425,168 @@ def maxViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
 
 /-!
 ## `glue`
+-/
+
+/-- Constructs the tree `l ++ r`. -/
+def glue (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) (hlr : BalancedAtRoot l.size r.size) :
+    Impl α β :=
+  match l with
+  | .leaf => r
+  | l@hl₀:(.inner sz k v l' r') =>
+    match r with
+    | .leaf => l
+    | r@hr₀:(.inner sz' k' v' l'' r'') =>
+      if sz < sz' then
+        let d := minView k' v' l'' r'' (by tree_tac) (by tree_tac) (by tree_tac)
+        balanceLErase d.k d.v l d.tree.impl (hl₀ ▸ hl) (by tree_tac)
+          (by simp only [tree_tac] at hl hr hlr; tree_tac)
+      else
+        let d := maxView k v l' r' (by tree_tac) (by tree_tac) (by tree_tac)
+        balanceRErase d.k d.v d.tree.impl r (by tree_tac) (hr₀ ▸ hr)
+          (by simp only [tree_tac] at hl hr hlr; tree_tac)
+
+@[tree_tac]
+theorem size_glue {l r : Impl α β} {hl hr hlr} : (glue l r hl hr hlr).size = l.size + r.size := by
+  simp only [glue]; tree_tac
+
+@[tree_tac]
+theorem balanced_glue {l r : Impl α β} {hl hr hlr} : (glue l r hl hr hlr).Balanced := by
+  simp only [glue]; tree_tac
+
+/-- Slower version of `glue` which can be used in the absence of balance information but still
+assumes the preconditions of `glue`, otherwise might panic. -/
+def glueSlow (l r : Impl α β) : Impl α β :=
+  match l with
+  | .leaf => r
+  | l@(.inner sz k v l' r') =>
+    match r with
+    | .leaf => l
+    | r@(.inner sz' k' v' l'' r'') =>
+      if sz < sz' then
+        let d := minViewSlow k' v' l'' r''
+        balanceLSlow d.k d.v l d.tree
+      else
+        let d := maxViewSlow k v l' r'
+        balanceRSlow d.k d.v d.tree r
+
+/-!
+## `insertMin` and `insertMax`
+-/
+
+/-- Inserts an element at the beginning of the tree. -/
+def insertMin (k : α) (v : β k) (r : Impl α β) (hr : r.Balanced) : Tree α β (1 + r.size) :=
+  match r with
+  | leaf => ⟨.inner 1 k v .leaf .leaf, by tree_tac, by tree_tac⟩
+  | inner sz k' v' l' r' => ⟨balanceL k' v' (insertMin k v l' (by tree_tac)).impl r'
+      (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+
+/-- Slower version of `insertMin` which can be used in the absence of balance information but
+still assumes the preconditions of `insertMin`, otherwise might panic. -/
+def insertMinSlow (k : α) (v : β k) (r : Impl α β) : Impl α β :=
+  match r with
+  | leaf => .inner 1 k v .leaf .leaf
+  | inner _ k' v' l' r' => balanceLSlow k' v' (insertMinSlow k v l') r'
+
+/-- Inserts an element at the end of the tree. -/
+def insertMax (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) : Tree α β (l.size + 1) :=
+  match l with
+  | leaf => ⟨.inner 1 k v .leaf .leaf, by tree_tac, by tree_tac⟩
+  | inner sz k' v' l' r' => ⟨balanceR k' v' l' (insertMax k v r' (by tree_tac)).impl
+      (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+
+/-- Slower version of `insertMax` which can be used in the absence of balance information but
+still assumes the preconditions of `insertMax`, otherwise might panic. -/
+def insertMaxSlow (k : α) (v : β k) (l : Impl α β) : Impl α β :=
+  match l with
+  | leaf => .inner 1 k v .leaf .leaf
+  | inner _ k' v' l' r' => balanceRSlow k' v' l' (insertMaxSlow k v r')
+
+/-!
+## `link` and `link2`
+-/
+
+attribute [tree_tac] and_true true_and
+
+set_option maxHeartbeats 0 in
+/-- Builds the tree `l ++ ⟨k, v⟩ ++ r` without any balancing information at the root. -/
+def link (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) :
+    Tree α β (l.size + 1 + r.size) :=
+  match l with
+  | leaf =>
+      let d := insertMin k v r (by tree_tac)
+      ⟨d.impl, by tree_tac, by tree_tac⟩
+  | l@hl':(inner szl k' v' l' r') =>
+      match r with
+      | leaf =>
+          let d := insertMax k v l (by tree_tac)
+          ⟨d.impl, by tree_tac, by tree_tac⟩
+      | r@hr':(inner szr k'' v'' l'' r'') =>
+          if h₁ : delta * szl < szr then
+            ⟨balanceLErase k'' v'' (link k v l l'' (by tree_tac) (by tree_tac)).impl r''
+              (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+          else if h₂ : delta * szr < szl then
+            ⟨balanceRErase k' v' l' (link k v r' r (by tree_tac) (by tree_tac)).impl
+              (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+          else
+            ⟨.inner (l.size + 1 + r.size) k v l r, by tree_tac, by tree_tac⟩
+  termination_by sizeOf l + sizeOf r
+
+/-- Slower version of `link` which can be used in the absence of balance information but
+still assumes the preconditions of `link`, otherwise might panic. -/
+def linkSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
+  match l with
+  | leaf => insertMinSlow k v r
+  | l@(inner szl k' v' l' r') =>
+      match r with
+      | leaf => insertMaxSlow k v l
+      | r@(inner szr k'' v'' l'' r'') =>
+          if delta * szl < szr then
+            balanceLSlow k'' v'' (linkSlow k v l l'') r''
+          else if delta * szr < szl then
+            balanceRSlow k' v' l' (linkSlow k v r r')
+          else
+            .inner (l.size + 1 + r.size) k v l r
+  termination_by sizeOf l + sizeOf r
+
+set_option maxHeartbeats 0 in
+/-- Builds the tree `l ++ r` without any balancing information at the root. -/
+def link2 (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) :
+    Tree α β (l.size + r.size) :=
+  match l with
+  | leaf => ⟨r, by tree_tac, by tree_tac⟩
+  | l@hl':(inner szl k' v' l' r') =>
+      match r with
+      | leaf => ⟨l, by tree_tac, by tree_tac⟩
+      | r@hr':(inner szr k'' v'' l'' r'') =>
+          if h₁ : delta * szl < szr then
+            ⟨balanceLErase k'' v'' (link2 l l'' (by tree_tac) (by tree_tac)).impl r'' (by tree_tac)
+              (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+          else if h₂ : delta * szr < szl then
+            ⟨balanceRErase k' v' l' (link2 r' r (by tree_tac) (by tree_tac)).impl (by tree_tac)
+              (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+          else
+            ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+  termination_by sizeOf l + sizeOf r
+
+/-- Slower version of `link2` which can be used in the absence of balance information but
+still assumes the preconditions of `link2`, otherwise might panic. -/
+def link2Slow (l r : Impl α β) : Impl α β :=
+  match l with
+  | leaf => r
+  | l@(inner szl k' v' l' r') =>
+      match r with
+      | leaf => l
+      | r@(inner szr k'' v'' l'' r'') =>
+          if delta * szl < szr then
+            balanceLSlow k'' v'' (link2Slow l l'') r''
+          else if delta * szr < szl then
+            balanceRSlow k' v' l' (link2Slow r' r )
+          else
+            glueSlow l r
+  termination_by sizeOf l + sizeOf r
+
+/-!
+### `insert`, 
 -/
 
 end Impl
