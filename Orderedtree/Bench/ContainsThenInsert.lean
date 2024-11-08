@@ -55,24 +55,3 @@ def main : IO Unit := do
   bench₂ values
   bench₃ values
   bench₄ values
-  -- IO.println "Modify"
-  -- for _ in [:20] do
-  --   let init : DHashMap String (fun _ => Nat) := DHashMap.empty sz
-  --   let m ← growInsert'L init strings 0
-  --   let _ ← timeit "" $ growInsert'L m strings 1
-  -- IO.println "Update"
-  -- for _ in [:20] do
-  --   let init : DHashMap String (fun _ => Nat) := DHashMap.empty sz
-  --   let m ← growInsert' init strings 0
-  --   let _ ← timeit "" $ growInsert' m strings 1
-  -- IO.println "Modify"
-  -- for _ in [:20] do
-  --   let init : DHashMap String (fun _ => Nat) := DHashMap.empty sz
-  --   let m ← growInsert'L init strings 0
-  --   let _ ← timeit "" $ growInsert'L m strings 1
-  -- IO.println "Update"
-  -- for _ in [:20] do
-  --   let init : DHashMap String (fun _ => Nat) := DHashMap.empty sz
-  --   let m ← growInsert' init strings 0
-  --   let _ ← timeit "" $ growInsert' m strings 1
-  -- return 0
