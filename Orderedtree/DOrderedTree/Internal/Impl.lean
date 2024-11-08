@@ -13,6 +13,8 @@ This file contains the basic definition implementing the functionality of the si
 Asaaa
 -/
 
+set_option debug.byAsSorry true
+
 set_option autoImplicit false
 set_option linter.all true
 
@@ -166,7 +168,8 @@ theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
 
 /-- Slower version of `balanceL` with weaker balancing assumptions that hold after erasing from
 the right side of the tree. -/
-@[inline] def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Balanced r)
+@[inline]
+def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Balanced r)
     (hlr : BalanceLErasePrecond l.size r.size) : Impl α β :=
   match r with
   | leaf => match l with
@@ -427,6 +430,7 @@ def maxViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
 -/
 
 /-- Constructs the tree `l ++ r`. -/
+@[inline]
 def glue (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) (hlr : BalancedAtRoot l.size r.size) :
     Impl α β :=
   match l with
@@ -454,6 +458,7 @@ theorem balanced_glue {l r : Impl α β} {hl hr hlr} : (glue l r hl hr hlr).Bala
 
 /-- Slower version of `glue` which can be used in the absence of balance information but still
 assumes the preconditions of `glue`, otherwise might panic. -/
+@[inline]
 def glueSlow (l r : Impl α β) : Impl α β :=
   match l with
   | .leaf => r
@@ -585,8 +590,96 @@ def link2Slow (l r : Impl α β) : Impl α β :=
   termination_by sizeOf l + sizeOf r
 
 /-!
-### `insert`,
+## Modification operations
 -/
+
+-- TODO: inline annotations
+-- TODO: rename slow to !
+
+variable (α β) in
+/-- A balanced tree of one of the given sizes. -/
+structure Tree₂ (size₁ size₂ : Nat) where
+  /-- The tree. -/
+  impl : Impl α β
+  /-- The tree is balanced. -/
+  balanced_impl : impl.Balanced
+  /-- The tree has size `size`. -/
+  size_impl : impl.size = size₁ ∨ impl.size = size₂
+
+attribute [tree_tac] Tree₂.balanced_impl
+
+/-- An empty tree. -/
+@[inline]
+def empty : Impl α β :=
+  .leaf
+
+attribute [tree_tac] or_true true_or
+
+/-- (Implementation detail) -/
+macro "✓" : term => `(term| by tree_tac)
+
+/-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
+def insert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Tree₂ α β l.size (l.size + 1) :=
+  match l with
+  | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | inner sz k' v' l r =>
+      match compare k k' with
+      | .lt =>
+          let ⟨d, hd, hd'⟩ := insert k v l ✓
+          ⟨balanceL k' v' d r ✓ ✓ ✓, ✓, ✓⟩
+      | .gt =>
+          let ⟨d, hd, hd'⟩ := insert k v r ✓
+          ⟨balanceR k' v' l d ✓ ✓ ✓, ✓, ✓⟩
+      | .eq => ⟨.inner sz k v l r, ✓, ✓⟩
+
+/-- Slower version of `insert` which can be used in the absence of balance information but
+still assumes the preconditions of `insert`, otherwise might panic. -/
+def insertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) : Impl α β :=
+  match l with
+  | leaf => .inner 1 k v .leaf .leaf
+  | inner sz k' v' l r =>
+      match compare k k' with
+      | .lt => balanceLSlow k' v' (insertSlow k v l) r
+      | .gt => balanceRSlow k' v' l (insertSlow k v r)
+      | .eq => .inner sz k v l r
+
+
+/-- Returns `true` if the given key is contained in the map. -/
+def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
+  match l with
+  | leaf => false
+  | inner _ k' _ l r =>
+      match compare k k' with
+      | .lt => contains k l
+      | .gt => contains k r
+      | .eq => true
+
+@[inline]
+def containsThenInsert₁ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Bool × Tree₂ α β l.size (l.size + 1) :=
+  (l.contains k, l.insert k v hl)
+
+@[inline]
+def containsThenInsert₂ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Bool × Tree₂ α β l.size (l.size + 1) :=
+  let sz := l.size
+  let m := l.insert k v hl
+  (sz == m.1.size, m)
+
+def containsThenInsert₃ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Bool × Tree₂ α β l.size (l.size + 1) :=
+  match l with
+  | leaf => ⟨false, .inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | inner sz k' v' l r =>
+      match compare k k' with
+      | .lt =>
+          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v l ✓
+          ⟨c, balanceL k' v' d r ✓ ✓ ✓, ✓, ✓⟩
+      | .gt =>
+          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v r ✓
+          ⟨c, balanceR k' v' l d ✓ ✓ ✓, ✓, ✓⟩
+      | .eq => ⟨true, .inner sz k v l r, ✓, ✓⟩
 
 end Impl
 
