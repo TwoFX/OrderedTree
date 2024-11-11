@@ -37,7 +37,7 @@ def leanContainsThenInsert (k : Nat) (v : Nat) (l : Lean.RBMap Nat Nat Ord.compa
 
 bench (Impl α β) ee Impl.empty ee Impl.containsThenInsert₁ ee bench₁ ee "First"
 bench (Impl α β) ee Impl.empty ee Impl.containsThenInsert₂ ee bench₂ ee "Second"
-bench (Impl α β) ee Impl.empty ee Impl.containsThenInsert₃ ee bench₃ ee "Thirdf"
+bench (Impl α β) ee Impl.empty ee Impl.containsThenInsert₃ ee bench₃ ee "Third"
 bench (Lean.RBMap Nat Nat Ord.compare) ee Lean.RBMap.empty ee leanContainsThenInsert ee bench₄ ee "Fourth"
 
 def n : Nat := 100000
