@@ -10,6 +10,3 @@ lean_lib «Orderedtree» where
 @[default_target]
 lean_exe «orderedtree» where
   root := `Main
-
-lean_exe «containstheninsert» where
-  root := `Orderedtree.Bench.ContainsThenInsert

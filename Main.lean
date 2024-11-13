@@ -1,4 +1,5 @@
-import «Orderedtree»
+import Orderedtree.Bench.ContainsThenInsert
+import Orderedtree.Basic
 
 def main : IO Unit :=
-  IO.println s!"Hello!"
+  Bench.ContainsThenInsert.main

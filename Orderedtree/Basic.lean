@@ -1,2 +1,3 @@
-import Orderedtree.DOrderedTree.Internal.List.Associative
+import Orderedtree.DOrderedTree.Internal.Impl
+import Orderedtree.DOrderedTree.Raw
 import Orderedtree.Examples.InversionCount

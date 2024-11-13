@@ -142,9 +142,9 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
     | inner _ lk lv ll@(.inner _ _ _ _ _) .leaf =>
         .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
     | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) => False.elim (by tree_tac)
-  | inner rs _ _ _ _ => match l with
+  | r@(inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
-    | inner ls lk lv ll lr =>
+    | l@(inner ls lk lv ll lr) =>
         if hlsd : ls > delta * rs then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
@@ -183,9 +183,9 @@ def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
         if lrs < ratio * lls then .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v lr .leaf)
         else .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
           (.inner (1 + lrr.size) k v lrr .leaf)
-  | (inner rs _ _ _ _) => match l with
+  | l@(inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
-    | inner ls lk lv ll lr =>
+    | r@(inner ls lk lv ll lr) =>
         if hlsd : ls > delta * rs then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
@@ -623,15 +623,15 @@ def insert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
     Tree₂ α β l.size (l.size + 1) :=
   match l with
   | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
-  | inner sz k' v' l r =>
+  | inner sz k' v' l' r' =>
       match compare k k' with
       | .lt =>
-          let ⟨d, hd, hd'⟩ := insert k v l ✓
-          ⟨balanceL k' v' d r ✓ ✓ ✓, ✓, ✓⟩
+          let ⟨d, hd, hd'⟩ := insert k v l' ✓
+          ⟨balanceL k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
       | .gt =>
-          let ⟨d, hd, hd'⟩ := insert k v r ✓
-          ⟨balanceR k' v' l d ✓ ✓ ✓, ✓, ✓⟩
-      | .eq => ⟨.inner sz k v l r, ✓, ✓⟩
+          let ⟨d, hd, hd'⟩ := insert k v r' ✓
+          ⟨balanceR k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
+      | .eq => ⟨.inner sz k v l' r', ✓, ✓⟩
 
 /-- Slower version of `insert` which can be used in the absence of balance information but
 still assumes the preconditions of `insert`, otherwise might panic. -/
@@ -655,31 +655,18 @@ def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
       | .gt => contains k r
       | .eq => true
 
+/-- Returns the pair `(l.contains k, l.insert k v)`. -/
 @[inline]
-def containsThenInsert₁ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+def containsThenInsert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
     Bool × Tree₂ α β l.size (l.size + 1) :=
-  (l.contains k, l.insert k v hl)
-
-@[inline]
-def containsThenInsert₂ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × Tree₂ α β l.size (l.size + 1) :=
-  let sz := l.size
+  let sz := size l
   let m := l.insert k v hl
   (sz == m.1.size, m)
+where -- workaround for https://github.com/leanprover/lean4/issues/6058
+  size : Impl α β → Nat
+  | leaf => 0
+  | inner sz _ _ _ _ => sz
 
-def containsThenInsert₃ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × Tree₂ α β l.size (l.size + 1) :=
-  match l with
-  | leaf => ⟨false, .inner 1 k v .leaf .leaf, ✓, ✓⟩
-  | inner sz k' v' l r =>
-      match compare k k' with
-      | .lt =>
-          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v l ✓
-          ⟨c, balanceL k' v' d r ✓ ✓ ✓, ✓, ✓⟩
-      | .gt =>
-          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v r ✓
-          ⟨c, balanceR k' v' l d ✓ ✓ ✓, ✓, ✓⟩
-      | .eq => ⟨true, .inner sz k v l r, ✓, ✓⟩
 
 end Impl
 
