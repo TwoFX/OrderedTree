@@ -13,7 +13,7 @@ This file contains the basic definition implementing the functionality of the si
 Asaaa
 -/
 
-set_option debug.byAsSorry true
+-- set_option debug.byAsSorry true
 
 set_option autoImplicit false
 set_option linter.all true
@@ -144,17 +144,17 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
     | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) => False.elim (by tree_tac)
   | r@(inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
-    | l@(inner ls lk lv ll lr) =>
+    | (inner ls lk lv ll lr) =>
         if hlsd : ls > delta * rs then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
-                .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+                .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v (inner lrs lrk lrv lrl lrr) r)
               else
                 .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
                   (.inner (1 + rs + lrr.size) k v lrr r)
           | leaf, _ => False.elim (by tree_tac)
           | _, leaf => False.elim (by tree_tac)
-        else .inner (1 + ls + rs) k v l r
+        else .inner (1 + ls + rs) k v (.inner ls lk lv ll lr) r
 
 @[tree_tac]
 theorem size_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
@@ -183,9 +183,9 @@ def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
         if lrs < ratio * lls then .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v lr .leaf)
         else .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
           (.inner (1 + lrr.size) k v lrr .leaf)
-  | l@(inner rs _ _ _ _) => match l with
+  | r@(inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
-    | r@(inner ls lk lv ll lr) =>
+    | l@(inner ls lk lv ll lr) =>
         if hlsd : ls > delta * rs then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
@@ -261,13 +261,13 @@ def balanceR (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
         if hrsd : rs > delta * ls then match rl, rr with
           | inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
               if rls < ratio * rrs then
-                .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l rl) rr
+                .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l (inner rls rlk rlv rll rlr)) rr
               else
                 .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll)
                   (.inner (1 + rrs + rlr.size) rk rv rlr rr)
           | leaf, _ => False.elim (by tree_tac)
           | _, leaf => False.elim (by tree_tac)
-        else .inner (1 + ls + rs) k v l r
+        else .inner (1 + ls + rs) k v l (inner rs rk rv rl rr)
 
 @[tree_tac]
 theorem size_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
@@ -667,6 +667,33 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
   | leaf => 0
   | inner sz _ _ _ _ => sz
 
+/-- Slower version of `containsThenInsertSlow` which can be used in the absence of balance
+information but still assumes the preconditions of `containsThenInsertSlow`, otherwise might panic. -/
+@[inline]
+def containsThenInsertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+    Bool × Impl α β :=
+  let sz := size l
+  let m := l.insertSlow k v
+  (sz == m.size, m)
+where -- workaround for https://github.com/leanprover/lean4/issues/6058
+  size : Impl α β → Nat
+  | leaf => 0
+  | inner sz _ _ _ _ => sz
+
+/-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
+def insertIfNew [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Tree₂ α β l.size (l.size + 1) :=
+  match l with
+  | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | inner sz k' v' l' r' =>
+      match compare k k' with
+      | .lt =>
+          let ⟨d, hd, hd'⟩ := insertIfNew k v l' ✓
+          ⟨balanceL k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
+      | .gt =>
+          let ⟨d, hd, hd'⟩ := insertIfNew k v r' ✓
+          ⟨balanceR k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
+      | .eq => ⟨.inner sz k' v' l' r', ✓, ✓⟩
 
 end Impl
 
