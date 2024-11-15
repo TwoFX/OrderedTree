@@ -11,10 +11,9 @@ import Lean.Elab.Tactic
 # Low-level implementation of the size-bounded tree
 
 This file contains the basic definition implementing the functionality of the size-bounded trees.
-Asaaa
 -/
 
-set_option debug.byAsSorry true
+-- set_option debug.byAsSorry true
 
 set_option autoImplicit false
 set_option linter.all true
@@ -44,6 +43,10 @@ def ratio : Nat := 2
 
 namespace Impl
 
+/-!
+## Query operations
+-/
+
 /-- The size information stored in the tree. -/
 @[inline]
 def size : Impl α β → Nat
@@ -52,6 +55,105 @@ def size : Impl α β → Nat
 
 @[tree_tac] theorem size_leaf : (Impl.leaf : Impl α β).size = 0 := rfl
 @[tree_tac] theorem size_inner {sz k v l r} : (Impl.inner sz k v l r : Impl α β).size = sz := rfl
+
+/-- Returns `true` if the given key is contained in the map. -/
+def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
+  match l with
+  | .leaf => false
+  | .inner _ k' _ l r =>
+    match compare k k' with
+    | .lt => contains k l
+    | .gt => contains k r
+    | .eq => true
+
+/-- Returns `true` if the tree is empty. -/
+@[inline]
+def isEmpty (l : Impl α β) : Bool :=
+  match l with
+  | .leaf => true
+  | .inner _ _ _ _ _ => false
+
+/-- Returns the value for the key `k`, or `none` if such a key does not exist. -/
+def get? [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) : Option (β k) :=
+  match l with
+  | .leaf => none
+  | .inner _ k' v' l r =>
+    match h : compare k k' with
+    | .lt => get? k l
+    | .gt => get? k r
+    | .eq => some (cast (congrArg β (eq_of_compare h).symm) v')
+
+/-- Returns the value for the key `k`. -/
+def get [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (hlk : l.contains k = true) : β k :=
+  match l with
+  | .inner _ k' v' l r =>
+    match h : compare k k' with
+    | .lt => get k l (by simpa [contains, h] using hlk)
+    | .gt => get k r (by simpa [contains, h] using hlk)
+    | .eq => cast (congrArg β (eq_of_compare h).symm) v'
+
+/-- Returns the value for the key `k`, or panics if such a key does not exist. -/
+def get! [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) [Inhabited (β k)] : β k :=
+  match l with
+  | .leaf => panic! "Key is not present in map"
+  | .inner _ k' v' l r =>
+    match h : compare k k' with
+    | .lt => get! k l
+    | .gt => get! k r
+    | .eq => cast (congrArg β (eq_of_compare h).symm) v'
+
+/-- Returns the value for the key `k`, or `fallback` if such a key does not exist. -/
+def getD [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (fallback : β k) : β k :=
+  match l with
+  | .leaf => fallback
+  | .inner _ k' v' l r =>
+    match h : compare k k' with
+    | .lt => getD k l fallback
+    | .gt => getD k r fallback
+    | .eq => cast (congrArg β (eq_of_compare h).symm) v'
+
+namespace Const
+
+/-- Returns the value for the key `k`, or `none` if such a key does not exist. -/
+def Const.get? [Ord α] (k : α) (l : Impl α (fun _ => δ)) : Option δ :=
+  match l with
+  | .leaf => none
+  | .inner _ k' v' l r =>
+    match compare k k' with
+    | .lt => get? k l
+    | .gt => get? k r
+    | .eq => some v'
+
+/-- Returns the value for the key `k`. -/
+def get [Ord α] (k : α) (l : Impl α (fun _ => δ)) (hlk : l.contains k = true) : δ :=
+  match l with
+  | .inner _ k' v' l r =>
+    match h : compare k k' with
+    | .lt => get k l (by simpa [contains, h] using hlk)
+    | .gt => get k r (by simpa [contains, h] using hlk)
+    | .eq => v'
+
+/-- Returns the value for the key `k`, or panics if such a key does not exist. -/
+def get! [Ord α] (k : α) (l : Impl α (fun _ => δ)) [Inhabited δ] : δ :=
+  match l with
+  | .leaf => panic! "Key is not present in map"
+  | .inner _ k' v' l r =>
+    match compare k k' with
+    | .lt => get! k l
+    | .gt => get! k r
+    | .eq => v'
+
+/-- Returns the value for the key `k`, or `fallback` if such a key does not exist. -/
+def getD [Ord α] (k : α) (l : Impl α (fun _ => δ)) (fallback : δ) : δ :=
+  match l with
+  | .leaf => fallback
+  | .inner _ k' v' l r =>
+    match compare k k' with
+    | .lt => getD k l fallback
+    | .gt => getD k r fallback
+    | .eq => v'
+
+end Const
 
 /-- Predicate for local balance at a node of the tree. We don't provide API for this, preferring
 instead to use automation to dispatch goals about balance. -/
@@ -764,17 +866,6 @@ def insertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) : Impl α β :=
       | .lt => balanceLSlow k' v' (insertSlow k v l) r
       | .gt => balanceRSlow k' v' l (insertSlow k v r)
       | .eq => .inner sz k v l r
-
-
-/-- Returns `true` if the given key is contained in the map. -/
-def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
-  match l with
-  | leaf => false
-  | inner _ k' _ l r =>
-      match compare k k' with
-      | .lt => contains k l
-      | .gt => contains k r
-      | .eq => true
 
 /-- Returns the pair `(l.contains k, l.insert k v)`. -/
 @[inline]
