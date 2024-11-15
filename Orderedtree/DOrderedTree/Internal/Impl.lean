@@ -3,6 +3,7 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
+import Orderedtree.Classes.LawfulEqOrd
 import Orderedtree.DOrderedTree.Internal.Impl.Attr
 import Lean.Elab.Tactic
 
@@ -13,7 +14,7 @@ This file contains the basic definition implementing the functionality of the si
 Asaaa
 -/
 
--- set_option debug.byAsSorry true
+set_option debug.byAsSorry true
 
 set_option autoImplicit false
 set_option linter.all true
@@ -914,8 +915,6 @@ def filterSlow [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) : Impl
     | false => link2Slow (filterSlow f l) (filterSlow f r)
     | true => linkSlow k v (filterSlow f l) (filterSlow f r)
 
-namespace Const
-
 variable (α β) in
 /-- A balanced tree of one of the given sizes. -/
 structure Tree₃ (size₁ size₂ size₃ : Nat) where
@@ -926,27 +925,31 @@ structure Tree₃ (size₁ size₂ size₃ : Nat) where
   /-- The tree has size `size`. -/
   size_impl : impl.size = size₁ ∨ impl.size = size₂ ∨ impl.size = size₃
 
+namespace Const
+
+-- TODO: unify indentation
+
 /-- Changes the mapping of the key `k` by applying the function `f` to the current mapped value
 (if any). This function can be used to insert a new mapping, modify an existing one or delete it. -/
 def modify [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ => δ)) (hl : l.Balanced) :
     Tree₃ α (fun _ => δ) (l.size - 1) l.size (l.size + 1) :=
   match l with
   | .leaf =>
-      match f none with
-      | none => ⟨.leaf, ✓, ✓⟩
-      | some v => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+    match f none with
+    | none => ⟨.leaf, ✓, ✓⟩
+    | some v => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
   | .inner sz k' v' l' r' =>
-      match compare k k' with
-      | .lt =>
-          let ⟨d, hd, hd'⟩ := modify k f l' ✓
-          ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
-      | .gt =>
-          let ⟨d, hd, hd'⟩ := modify k f r' ✓
-          ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
-      | .eq =>
-          match f v' with
-          | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓⟩
-          | some v => ⟨.inner sz k' v l' r', ✓, ✓⟩
+    match compare k k' with
+    | .lt =>
+        let ⟨d, hd, hd'⟩ := modify k f l' ✓
+        ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
+    | .gt =>
+        let ⟨d, hd, hd'⟩ := modify k f r' ✓
+        ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
+    | .eq =>
+      match f (some v') with
+      | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓⟩
+      | some v => ⟨.inner sz k' v l' r', ✓, ✓⟩
 
 /-- Slower version of `modify` which can be used in the absence of balance
 information but still assumes the preconditions of `modify`, otherwise might panic. -/
@@ -954,19 +957,61 @@ def modifySlow [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun
     Impl α (fun _ => δ) :=
   match l with
   | .leaf =>
-      match f none with
-      | none => .leaf
-      | some v => .inner 1 k v .leaf .leaf
+    match f none with
+    | none => .leaf
+    | some v => .inner 1 k v .leaf .leaf
   | .inner sz k' v' l' r' =>
-      match compare k k' with
-      | .lt => balanceSlow k' v' (modifySlow k f l') r'
-      | .gt => balanceSlow k' v' l' (modifySlow k f r')
-      | .eq =>
-          match f v' with
-          | none => glueSlow l' r'
-          | some v => .inner sz k' v l' r'
+    match compare k k' with
+    | .lt => balanceSlow k' v' (modifySlow k f l') r'
+    | .gt => balanceSlow k' v' l' (modifySlow k f r')
+    | .eq =>
+      match f (some v') with
+      | none => glueSlow l' r'
+      | some v => .inner sz k' v l' r'
 
 end Const
+
+/-- Changes the mapping of the key `k` by applying the function `f` to the current mapped value
+(if any). This function can be used to insert a new mapping, modify an existing one or delete it.
+This version of the function requires `LawfulEqOrd α`. There is an alternative non-dependent version
+called `Const.modify`. -/
+def modify [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (l : Impl α β)
+    (hl : l.Balanced) : Tree₃ α β (l.size - 1) l.size (l.size + 1) :=
+  match l with
+  | .leaf =>
+    match f none with
+    | none => ⟨.leaf, ✓, ✓⟩
+    | some v => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | .inner sz k' v' l' r' =>
+    match h : compare k k' with
+    | .lt =>
+        let ⟨d, hd, hd'⟩ := modify k f l' ✓
+        ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
+    | .gt =>
+        let ⟨d, hd, hd'⟩ := modify k f r' ✓
+        ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
+    | .eq =>
+      match f (some (cast (congrArg β (eq_of_compare h).symm) v')) with
+      | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓⟩
+      | some v => ⟨.inner sz k v l' r', ✓, ✓⟩
+
+/-- Slower version of `modify` which can be used in the absence of balance
+information but still assumes the preconditions of `modify`, otherwise might panic. -/
+def modifySlow [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (l : Impl α β)
+    : Impl α β :=
+  match l with
+  | .leaf =>
+    match f none with
+    | none => .leaf
+    | some v => .inner 1 k v .leaf .leaf
+  | .inner sz k' v' l' r' =>
+    match h : compare k k' with
+    | .lt => balanceSlow k' v' (modifySlow k f l') r'
+    | .gt => balanceSlow k' v' l' (modifySlow k f r')
+    | .eq =>
+      match f (some (cast (congrArg β (eq_of_compare h).symm) v')) with
+      | none => glueSlow l' r'
+      | some v => .inner sz k v l' r'
 
 /-- If the tree contains a mapping `(k', v)` with `k == k'`, adjust it to have mapping
 `(k', f k' v h)`, which `h : compare k k' = .eq`. If no such mapping is present, returns the
