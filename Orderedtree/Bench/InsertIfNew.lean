@@ -10,6 +10,15 @@ namespace Bench.InsertIfNew
 
 open Std.DOrderedTree.Internal Impl
 
+partial def fisherYates (a : Array α) : Array α := Id.run do
+  let mut res := a
+  let mut rng := mkStdGen
+  for i in [0:a.size] do
+    let (select, newRng) := randNat rng i (a.size - 1)
+    rng := newRng
+    res := res.swap! i select
+  res
+
 abbrev α : Type := Nat
 abbrev β : α → Type := fun _ => Nat
 
@@ -61,10 +70,10 @@ bench(Impl Nat (fun _ => Nat), Impl.empty, insertIfNew₂, bench₂, "Second")
 bench(Impl Nat (fun _ => Nat), Impl.empty, Impl.insertIfNew, bench₃, "Third")
 bench(Lean.RBMap Nat Nat Ord.compare, Lean.RBMap.empty, leanInsertIfNew, benchL, "Lean")
 
-def n : Nat := 150000
+def n : Nat := 300000
 
 def mkArr : Array α :=
-  Array.range (2 * n) --++ (Array.range n |>.map (·*2))
+  fisherYates (Array.range (2 * n) ++ (Array.range n |>.map (·*2)))
 
 def main : IO Unit := do
   let values := mkArr

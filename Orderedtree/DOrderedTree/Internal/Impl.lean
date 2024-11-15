@@ -18,9 +18,9 @@ Asaaa
 set_option autoImplicit false
 set_option linter.all true
 
-universe u v
+universe u v w
 
-variable {α : Type u} {β : α → Type v}
+variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type v}
 
 namespace Std.DOrderedTree.Internal
 
@@ -95,25 +95,15 @@ section
 
 open Lean Meta Elab Tactic
 
--- TODO: Can't use `elab` in Std
 /-- (Implementation detail) -/
-elab "split_and" : tactic => liftMetaTactic fun mvarId => do
-  let hyps ← getPropHyps
-  for hyp in hyps do
-    let t ← instantiateMVars (← hyp.getType)
-    if let .app (.app (.const `And _) _) _ := t then
-      return (← runTactic mvarId (← `(tactic| cases $(Lean.mkIdent (← hyp.getUserName)):term))).1
-  throwError "no matching hypothesis found"
-
-/-- (Implementation detail) -/
-macro "tree_tac" : tactic => `(tactic|(
+scoped macro "tree_tac" : tactic => `(tactic|(
   subst_eqs
   repeat' split
   all_goals
     try simp only [tree_tac] at *
   all_goals
     try simp only [tree_tac] at *
-    repeat' split_and
+    repeat cases ‹_ ∧ _›
     repeat' apply And.intro
   all_goals
     try assumption
@@ -121,6 +111,9 @@ macro "tree_tac" : tactic => `(tactic|(
   all_goals
     omega
   ))
+
+/-- (Implementation detail) -/
+scoped macro "✓" : term => `(term| by tree_tac)
 
 end
 
@@ -141,10 +134,10 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
         .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf) (.inner 1 k v .leaf .leaf)
     | inner _ lk lv ll@(.inner _ _ _ _ _) .leaf =>
         .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
-    | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) => False.elim (by tree_tac)
-  | r@(inner rs _ _ _ _) => match l with
+    | inner ls lk lv (.inner lls _ _ _ _) (.inner lrs _ _ _ _) => False.elim ✓
+  | inner rs _ _ _ _ => match l with
     | leaf => .inner (1 + rs) k v .leaf r
-    | (inner ls lk lv ll lr) =>
+    | inner ls lk lv ll lr =>
         if hlsd : ls > delta * rs then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
@@ -152,8 +145,8 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
               else
                 .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
                   (.inner (1 + rs + lrr.size) k v lrr r)
-          | leaf, _ => False.elim (by tree_tac)
-          | _, leaf => False.elim (by tree_tac)
+          | leaf, _ => False.elim ✓
+          | _, leaf => False.elim ✓
         else .inner (1 + ls + rs) k v (.inner ls lk lv ll lr) r
 
 @[tree_tac]
@@ -193,8 +186,8 @@ def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
               else
                 .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
                   (.inner (1 + rs + lrr.size) k v lrr r)
-          | leaf, _ => False.elim (by tree_tac)
-          | _, leaf => False.elim (by tree_tac)
+          | leaf, _ => False.elim ✓
+          | _, leaf => False.elim ✓
         else .inner (1 + ls + rs) k v l r
 
 @[tree_tac]
@@ -249,24 +242,24 @@ def balanceR (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
   match l with
   | leaf => match r with
     | leaf => .inner 1 k v .leaf .leaf
-    | r@(inner _ _ _ .leaf .leaf) => .inner 2 k v .leaf r
+    | (inner _ _ _ .leaf .leaf) => .inner 2 k v .leaf r
     | inner _ rk rv .leaf rr@(.inner _ _ _ _ _) => .inner 3 rk rv (.inner 1 k v .leaf .leaf) rr
     | inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf)
         (.inner 1 rk rv .leaf .leaf)
-    | inner rs rk rv rl@(.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
-        False.elim (by tree_tac)
+    | inner rs rk rv (.inner rls rlk rlv rll rlr) (.inner rrs _ _ _ _) =>
+        False.elim ✓
   | inner ls _ _ _ _ => match r with
     | leaf => .inner (1 + ls) k v l .leaf
     | inner rs rk rv rl rr =>
         if hrsd : rs > delta * ls then match rl, rr with
           | inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
               if rls < ratio * rrs then
-                .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l (inner rls rlk rlv rll rlr)) rr
+                .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l (.inner rls rlk rlv rll rlr)) rr
               else
                 .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll)
                   (.inner (1 + rrs + rlr.size) rk rv rlr rr)
-          | leaf, _ => False.elim (by tree_tac)
-          | _, leaf => False.elim (by tree_tac)
+          | leaf, _ => False.elim ✓
+          | _, leaf => False.elim ✓
         else .inner (1 + ls + rs) k v l (inner rs rk rv rl rr)
 
 @[tree_tac]
@@ -305,8 +298,8 @@ def balanceRErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
               else
                 .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll)
                   (.inner (1 + rrs + rlr.size) rk rv rlr rr)
-          | leaf, _ => False.elim (by tree_tac)
-          | _, leaf => False.elim (by tree_tac)
+          | leaf, _ => False.elim ✓
+          | _, leaf => False.elim ✓
         else .inner (1 + ls + rs) k v l r
 
 @[tree_tac]
@@ -350,6 +343,136 @@ def balanceRSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
         else .inner (1 + ls + rs) k v l r
 
 /-!
+## `balance` variants
+-/
+
+/-- Rebalances a tree after at most one element was added or removed from either subtree. -/
+def balance (k : α) (v : β k) (l r : Impl α β) (hl : Balanced l) (hr : Balanced r)
+    (h : BalancedAtRoot l.size r.size ∨
+      BalancedAtRoot (l.size + 1) (r.size) ∨
+      BalancedAtRoot (l.size) (r.size + 1) ∨
+      (1 ≤ l.size ∧ BalancedAtRoot (l.size - 1) r.size) ∨
+      (1 ≤ r.size ∧ BalancedAtRoot l.size (r.size - 1))) : Impl α β :=
+  match l with
+  | .leaf =>
+    match r with
+    | .leaf => .inner 1 k v .leaf .leaf
+    | .inner _ _ _ .leaf .leaf => .inner 2 k v .leaf r
+    | .inner _ rk rv .leaf rr@(.inner _ _ _ _ _) => .inner 3 rk rv (.inner 1 k v .leaf .leaf) rr
+    | .inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf)
+        (.inner 1 rk rv .leaf .leaf)
+    | .inner rs rk rv (.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
+        if rls < ratio * rrs then
+          .inner (1 + rs) rk rv (.inner (1 + rls) k v .leaf (.inner rls rlk rlv rll rlr)) rr
+        else
+          .inner (1 + rs) rlk rlv (.inner (1 + rll.size) k v .leaf rll)
+            (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+  | .inner ls lk lv ll lr =>
+    match r with
+    | .leaf =>
+      match ll, lr with
+      | .leaf, .leaf => .inner 2 k v l .leaf
+      | .leaf, .inner _ lrk lrv _ _ => .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf)
+          (.inner 1 k v .leaf .leaf)
+      | .inner _ _ _ _ _, .leaf => .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
+      | .inner lls _ _ _ _, .inner lrs lrk lrv lrl lrr =>
+        if lrs < ratio * lls then
+          .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v (.inner lrs lrk lrv lrl lrr) .leaf)
+        else
+          .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+            (.inner (1 + lrr.size) k v lrr .leaf)
+    | .inner rs rk rv rl rr =>
+      if h₁ : rs > delta * ls then
+        match rl, rr with
+        | .inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
+            if rls < ratio * rrs then
+              .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l rl) rr
+            else
+              .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll)
+                (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+        | .leaf, _ => False.elim ✓
+        | _, .leaf => False.elim ✓
+      else if h₂ : ls > delta * rs then
+        match ll, lr with
+        | .inner lls _ _ _ _, .inner lrs lrk lrv lrl lrr =>
+            if lrs < ratio * lls then
+              .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+            else
+              .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+                (.inner (1 + rs + lrr.size) k v lrr r)
+        | .leaf, _ => False.elim ✓
+        | _, .leaf => False.elim ✓
+      else
+        .inner (1 + ls + rs) k v l r
+
+@[tree_tac]
+theorem size_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balance k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
+  simp only [balance.eq_def]; tree_tac
+
+set_option maxHeartbeats 0 in
+@[tree_tac]
+theorem balanced_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balance k v l r hlb hrb hlr).Balanced := by
+  sorry
+
+/-- Slow version of `balance` which can be used in the complete absence of balancing information
+but still assumes that the preconditions of `balance` are satisfied
+(otherwise panics). -/
+def balanceSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
+  match l with
+  | .leaf =>
+    match r with
+    | .leaf => .inner 1 k v .leaf .leaf
+    | .inner _ _ _ .leaf .leaf => .inner 2 k v .leaf r
+    | .inner _ rk rv .leaf rr@(.inner _ _ _ _ _) => .inner 3 rk rv (.inner 1 k v .leaf .leaf) rr
+    | .inner _ rk rv (.inner _ rlk rlv _ _) .leaf => .inner 3 rlk rlv (.inner 1 k v .leaf .leaf)
+        (.inner 1 rk rv .leaf .leaf)
+    | .inner rs rk rv (.inner rls rlk rlv rll rlr) rr@(.inner rrs _ _ _ _) =>
+        if rls < ratio * rrs then
+          .inner (1 + rs) rk rv (.inner (1 + rls) k v .leaf (.inner rls rlk rlv rll rlr)) rr
+        else
+          .inner (1 + rs) rlk rlv (.inner (1 + rll.size) k v .leaf rll)
+            (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+  | .inner ls lk lv ll lr =>
+    match r with
+    | .leaf =>
+      match ll, lr with
+      | .leaf, .leaf => .inner 2 k v l .leaf
+      | .leaf, .inner _ lrk lrv _ _ => .inner 3 lrk lrv (.inner 1 lk lv .leaf .leaf)
+          (.inner 1 k v .leaf .leaf)
+      | .inner _ _ _ _ _, .leaf => .inner 3 lk lv ll (.inner 1 k v .leaf .leaf)
+      | .inner lls _ _ _ _, .inner lrs lrk lrv lrl lrr =>
+        if lrs < ratio * lls then
+          .inner (1 + ls) lk lv ll (.inner (1 + lrs) k v (.inner lrs lrk lrv lrl lrr) .leaf)
+        else
+          .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+            (.inner (1 + lrr.size) k v lrr .leaf)
+    | .inner rs rk rv rl rr =>
+      if rs > delta * ls then
+        match rl, rr with
+        | .inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
+            if rls < ratio * rrs then
+              .inner (1 + ls + rs) rk rv (.inner (1 + ls + rls) k v l rl) rr
+            else
+              .inner (1 + ls + rs) rlk rlv (.inner (1 + ls + rll.size) k v l rll)
+                (.inner (1 + rrs + rlr.size) rk rv rlr rr)
+        | .leaf, _ => panic! "balanceSlow input was not balanced"
+        | _, .leaf => panic! "balanceSlow input was not balanced"
+      else if ls > delta * rs then
+        match ll, lr with
+        | .inner lls _ _ _ _, .inner lrs lrk lrv lrl lrr =>
+            if lrs < ratio * lls then
+              .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
+            else
+              .inner (1 + ls + rs) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
+                (.inner (1 + rs + lrr.size) k v lrr r)
+        | .leaf, _ => panic! "balanceSlow input was not balanced"
+        | _, .leaf => panic! "balanceSlow input was not balanced"
+      else
+        .inner (1 + ls + rs) k v l r
+
+/-!
 ## `minView` and `maxView`
 -/
 
@@ -389,12 +512,12 @@ attribute [tree_tac] Tree.balanced_impl Tree.size_impl
 def minView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
     (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match l with
-  | leaf => ⟨k, v, ⟨r, hr, by tree_tac⟩⟩
+  | leaf => ⟨k, v, ⟨r, hr, ✓⟩⟩
   | inner _ k' v' l' r' =>
-      let d := minView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
-      ⟨d.k, d.v, ⟨balanceRErase k v d.tree.impl r (by tree_tac) (by tree_tac)
+      let d := minView k' v' l' r' ✓ ✓ ✓
+      ⟨d.k, d.v, ⟨balanceRErase k v d.tree.impl r ✓ ✓
             (by simp only [tree_tac] at hl; tree_tac),
-          by tree_tac, by simp only [tree_tac] at hl; tree_tac⟩⟩
+          ✓, by simp only [tree_tac] at hl; tree_tac⟩⟩
 
 /-- Slow version of `minView` which can be used in the absence of balance information but still
 assumes the preconditions of `minView`, otherwise might panic. -/
@@ -409,12 +532,12 @@ def minViewSlow (k : α) (v : β k) (l r : Impl α β) : RawView α β :=
 def maxView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
     (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
   match r with
-  | leaf => ⟨k, v, ⟨l, hl, by tree_tac⟩⟩
+  | leaf => ⟨k, v, ⟨l, hl, ✓⟩⟩
   | inner _ k' v' l' r' =>
-      let d := maxView k' v' l' r' (by tree_tac) (by tree_tac) (by tree_tac)
-      ⟨d.k, d.v, ⟨balanceLErase k v l d.tree.impl (by tree_tac) (by tree_tac)
+      let d := maxView k' v' l' r' ✓ ✓ ✓
+      ⟨d.k, d.v, ⟨balanceLErase k v l d.tree.impl ✓ ✓
             (by simp only [tree_tac] at hr; tree_tac),
-          by tree_tac, by simp only [tree_tac] at hr; tree_tac⟩⟩
+          ✓, by simp only [tree_tac] at hr; tree_tac⟩⟩
 
 /-- Slow version of `maxView` which can be used in the absence of balance information but still
 assumes the preconditions of `maxView`, otherwise might panic. -/
@@ -440,12 +563,12 @@ def glue (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) (hlr : BalancedA
     | .leaf => l
     | r@hr₀:(.inner sz' k' v' l'' r'') =>
       if sz < sz' then
-        let d := minView k' v' l'' r'' (by tree_tac) (by tree_tac) (by tree_tac)
-        balanceLErase d.k d.v l d.tree.impl (hl₀ ▸ hl) (by tree_tac)
+        let d := minView k' v' l'' r'' ✓ ✓ ✓
+        balanceLErase d.k d.v l d.tree.impl (hl₀ ▸ hl) ✓
           (by simp only [tree_tac] at hl hr hlr; tree_tac)
       else
-        let d := maxView k v l' r' (by tree_tac) (by tree_tac) (by tree_tac)
-        balanceRErase d.k d.v d.tree.impl r (by tree_tac) (hr₀ ▸ hr)
+        let d := maxView k v l' r' ✓ ✓ ✓
+        balanceRErase d.k d.v d.tree.impl r ✓ (hr₀ ▸ hr)
           (by simp only [tree_tac] at hl hr hlr; tree_tac)
 
 @[tree_tac]
@@ -480,9 +603,9 @@ def glueSlow (l r : Impl α β) : Impl α β :=
 /-- Inserts an element at the beginning of the tree. -/
 def insertMin (k : α) (v : β k) (r : Impl α β) (hr : r.Balanced) : Tree α β (1 + r.size) :=
   match r with
-  | leaf => ⟨.inner 1 k v .leaf .leaf, by tree_tac, by tree_tac⟩
-  | inner sz k' v' l' r' => ⟨balanceL k' v' (insertMin k v l' (by tree_tac)).impl r'
-      (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+  | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | inner sz k' v' l' r' => ⟨balanceL k' v' (insertMin k v l' ✓).impl r'
+      ✓ ✓ ✓, ✓, ✓⟩
 
 /-- Slower version of `insertMin` which can be used in the absence of balance information but
 still assumes the preconditions of `insertMin`, otherwise might panic. -/
@@ -494,9 +617,9 @@ def insertMinSlow (k : α) (v : β k) (r : Impl α β) : Impl α β :=
 /-- Inserts an element at the end of the tree. -/
 def insertMax (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) : Tree α β (l.size + 1) :=
   match l with
-  | leaf => ⟨.inner 1 k v .leaf .leaf, by tree_tac, by tree_tac⟩
-  | inner sz k' v' l' r' => ⟨balanceR k' v' l' (insertMax k v r' (by tree_tac)).impl
-      (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+  | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | inner sz k' v' l' r' => ⟨balanceR k' v' l' (insertMax k v r' ✓).impl
+      ✓ ✓ ✓, ✓, ✓⟩
 
 /-- Slower version of `insertMax` which can be used in the absence of balance information but
 still assumes the preconditions of `insertMax`, otherwise might panic. -/
@@ -517,22 +640,22 @@ def link (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanc
     Tree α β (l.size + 1 + r.size) :=
   match l with
   | leaf =>
-      let d := insertMin k v r (by tree_tac)
-      ⟨d.impl, by tree_tac, by tree_tac⟩
+      let d := insertMin k v r ✓
+      ⟨d.impl, ✓, ✓⟩
   | l@hl':(inner szl k' v' l' r') =>
       match r with
       | leaf =>
-          let d := insertMax k v l (by tree_tac)
-          ⟨d.impl, by tree_tac, by tree_tac⟩
+          let d := insertMax k v l ✓
+          ⟨d.impl, ✓, ✓⟩
       | r@hr':(inner szr k'' v'' l'' r'') =>
           if h₁ : delta * szl < szr then
-            ⟨balanceLErase k'' v'' (link k v l l'' (by tree_tac) (by tree_tac)).impl r''
-              (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+            ⟨balanceLErase k'' v'' (link k v l l'' ✓ ✓).impl r''
+              ✓ ✓ ✓, ✓, ✓⟩
           else if h₂ : delta * szr < szl then
-            ⟨balanceRErase k' v' l' (link k v r' r (by tree_tac) (by tree_tac)).impl
-              (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+            ⟨balanceRErase k' v' l' (link k v r' r ✓ ✓).impl
+              ✓ ✓ ✓, ✓, ✓⟩
           else
-            ⟨.inner (l.size + 1 + r.size) k v l r, by tree_tac, by tree_tac⟩
+            ⟨.inner (l.size + 1 + r.size) k v l r, ✓, ✓⟩
   termination_by sizeOf l + sizeOf r
 
 /-- Slower version of `link` which can be used in the absence of balance information but
@@ -557,19 +680,19 @@ set_option maxHeartbeats 0 in
 def link2 (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) :
     Tree α β (l.size + r.size) :=
   match l with
-  | leaf => ⟨r, by tree_tac, by tree_tac⟩
+  | leaf => ⟨r, ✓, ✓⟩
   | l@hl':(inner szl k' v' l' r') =>
       match r with
-      | leaf => ⟨l, by tree_tac, by tree_tac⟩
+      | leaf => ⟨l, ✓, ✓⟩
       | r@hr':(inner szr k'' v'' l'' r'') =>
           if h₁ : delta * szl < szr then
-            ⟨balanceLErase k'' v'' (link2 l l'' (by tree_tac) (by tree_tac)).impl r'' (by tree_tac)
-              (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+            ⟨balanceLErase k'' v'' (link2 l l'' ✓ ✓).impl r'' ✓
+              ✓ ✓, ✓, ✓⟩
           else if h₂ : delta * szr < szl then
-            ⟨balanceRErase k' v' l' (link2 r' r (by tree_tac) (by tree_tac)).impl (by tree_tac)
-              (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+            ⟨balanceRErase k' v' l' (link2 r' r ✓ ✓).impl ✓
+              ✓ ✓, ✓, ✓⟩
           else
-            ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+            ⟨glue l r ✓ ✓ ✓, ✓, ✓⟩
   termination_by sizeOf l + sizeOf r
 
 /-- Slower version of `link2` which can be used in the absence of balance information but
@@ -614,9 +737,6 @@ def empty : Impl α β :=
   .leaf
 
 attribute [tree_tac] or_true true_or
-
-/-- (Implementation detail) -/
-macro "✓" : term => `(term| by tree_tac)
 
 /-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
 def insert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
@@ -667,8 +787,8 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
   | leaf => 0
   | inner sz _ _ _ _ => sz
 
-/-- Slower version of `containsThenInsertSlow` which can be used in the absence of balance
-information but still assumes the preconditions of `containsThenInsertSlow`, otherwise might panic. -/
+/-- Slower version of `containsThenInsert` which can be used in the absence of balance
+information but still assumes the preconditions of `containsThenInsert`, otherwise might panic. -/
 @[inline]
 def containsThenInsertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
     Bool × Impl α β :=
@@ -681,19 +801,186 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
   | inner sz _ _ _ _ => sz
 
 /-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
+@[inline]
 def insertIfNew [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
     Tree₂ α β l.size (l.size + 1) :=
+  if l.contains k then ⟨l, ✓, ✓⟩ else l.insert k v ✓
+
+/-- Slower version of `insertIfNew` which can be used in the absence of balance
+information but still assumes the preconditions of `insertIfNew`, otherwise might panic. -/
+@[inline]
+def insertIfNewSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+    Impl α β :=
+  if l.contains k then l else l.insertSlow k v
+
+/-- Returns the pair `(l.contains k, l.insertIfNew k v)`. -/
+@[inline]
+def containsThenInsertIfNew [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+    Bool × Tree₂ α β l.size (l.size + 1) :=
+  if l.contains k then (true, ⟨l, ✓, ✓⟩) else (false, l.insert k v ✓)
+
+/-- Slower version of `containsThenInsertIfNew` which can be used in the absence of balance
+information but still assumes the preconditions of `containsThenInsertIfNew`, otherwise might panic. -/
+@[inline]
+def containsThenInsertIfNewSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+    Bool × Impl α β :=
+  if l.contains k then (true, l) else (false, l.insertSlow k v)
+
+/-- Removes the mapping with key `k`, if it exists. -/
+def erase [Ord α] (l : Impl α β) (k : α) (h : l.Balanced) : Tree₂ α β l.size (l.size - 1) :=
   match l with
-  | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
-  | inner sz k' v' l' r' =>
+  | leaf => ⟨.leaf, ✓, ✓⟩
+  | inner sz k' v' l r =>
+    match compare k k' with
+    | .lt =>
+      let ⟨l', hl'₁, hl'₂⟩ := erase l k ✓
+      ⟨balanceRErase k' v' l' r ✓ ✓ ✓, ✓, ✓⟩
+    | .gt =>
+      let ⟨r', hr'₁, hr'₂⟩ := erase r k ✓
+      ⟨balanceLErase k' v' l r' ✓ ✓ ✓, ✓, ✓⟩
+    | .eq => ⟨glue l r ✓ ✓ ✓, ✓, ✓⟩
+
+/-- Slower version of `erase` which can be used in the absence of balance
+information but still assumes the preconditions of `erase`, otherwise might panic. -/
+def eraseSlow [Ord α] (l : Impl α β) (k : α) : Impl α β :=
+  match l with
+  | leaf => .leaf
+  | inner _ k' v' l r =>
+    match compare k k' with
+    | .lt => balanceRSlow k' v' (eraseSlow l k) r
+    | .gt => balanceLSlow k' v' l (eraseSlow r k)
+    | .eq => glueSlow l r
+
+variable (α β) in
+/-- A balanced tree. -/
+structure BImpl where
+  /-- The tree. -/
+  impl : Impl α β
+  /-- The tree is balanced. -/
+  balanced_impl : impl.Balanced
+
+attribute [tree_tac] BImpl.balanced_impl
+
+/-- Returns the tree consisting of the mappings `(k, (f k v).get)` where `(k, v)` was a mapping in
+the original tree and `(f k v).isSome`. -/
+@[specialize]
+def filterMap [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl α β) (hl : l.Balanced) :
+    BImpl α γ :=
+  match l with
+  | .leaf => ⟨.leaf, ✓⟩
+  | .inner sz k v l r =>
+    match f k v with
+    | none => ⟨(link2 (filterMap f l ✓).impl (filterMap f r ✓).impl ✓ ✓).impl, ✓⟩
+    | some v' => ⟨(link k v' (filterMap f l ✓).impl (filterMap f r ✓).impl ✓ ✓).impl, ✓⟩
+
+/-- Slower version of `filterMap` which can be used in the absence of balance
+information but still assumes the preconditions of `filterMap`, otherwise might panic. -/
+@[specialize]
+def filterMapSlow [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl α β) : Impl α γ :=
+  match l with
+  | .leaf => .leaf
+  | .inner _ k v l r =>
+    match f k v with
+    | none => link2Slow (filterMapSlow f l) (filterMapSlow f r)
+    | some v' => linkSlow k v' (filterMapSlow f l) (filterMapSlow f r)
+
+/-- Returns the tree consisting of the mappings `(k, f k v)` where `(k, v)` was a mapping in the
+original tree. -/
+@[specialize]
+def map [Ord α] (f : (a : α) → β a → γ a) (l : Impl α β) : Impl α γ :=
+  match l with
+  | .leaf => .leaf
+  | .inner sz k v l r => .inner sz k (f k v) (map f l) (map f r)
+
+/-- Returns the tree consisting of the mapping `(k, v)` where `(k, v)` was a mapping in the
+original tree and `f k v = true`. -/
+@[specialize]
+def filter [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) (hl : Balanced l) : BImpl α β :=
+  match l with
+  | .leaf => ⟨.leaf, ✓⟩
+  | .inner sz k v l r =>
+    match f k v with
+    | false => ⟨(link2 (filter f l ✓).impl (filter f r ✓).impl ✓ ✓).impl, ✓⟩
+    | true => ⟨(link k v (filter f l ✓).impl (filter f r ✓).impl ✓ ✓).impl, ✓⟩
+
+/-- Slower version of `filter` which can be used in the absence of balance
+information but still assumes the preconditions of `filter`, otherwise might panic. -/
+@[specialize]
+def filterSlow [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) : Impl α β :=
+  match l with
+  | .leaf => .leaf
+  | .inner _ k v l r =>
+    match f k v with
+    | false => link2Slow (filterSlow f l) (filterSlow f r)
+    | true => linkSlow k v (filterSlow f l) (filterSlow f r)
+
+namespace Const
+
+variable (α β) in
+/-- A balanced tree of one of the given sizes. -/
+structure Tree₃ (size₁ size₂ size₃ : Nat) where
+  /-- The tree. -/
+  impl : Impl α β
+  /-- The tree is balanced. -/
+  balanced_impl : impl.Balanced
+  /-- The tree has size `size`. -/
+  size_impl : impl.size = size₁ ∨ impl.size = size₂ ∨ impl.size = size₃
+
+/-- Changes the mapping of the key `k` by applying the function `f` to the current mapped value
+(if any). This function can be used to insert a new mapping, modify an existing one or delete it. -/
+def modify [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ => δ)) (hl : l.Balanced) :
+    Tree₃ α (fun _ => δ) (l.size - 1) l.size (l.size + 1) :=
+  match l with
+  | .leaf =>
+      match f none with
+      | none => ⟨.leaf, ✓, ✓⟩
+      | some v => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
+  | .inner sz k' v' l' r' =>
       match compare k k' with
       | .lt =>
-          let ⟨d, hd, hd'⟩ := insertIfNew k v l' ✓
-          ⟨balanceL k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
+          let ⟨d, hd, hd'⟩ := modify k f l' ✓
+          ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓⟩
       | .gt =>
-          let ⟨d, hd, hd'⟩ := insertIfNew k v r' ✓
-          ⟨balanceR k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
-      | .eq => ⟨.inner sz k' v' l' r', ✓, ✓⟩
+          let ⟨d, hd, hd'⟩ := modify k f r' ✓
+          ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓⟩
+      | .eq =>
+          match f v' with
+          | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓⟩
+          | some v => ⟨.inner sz k' v l' r', ✓, ✓⟩
+
+/-- Slower version of `modify` which can be used in the absence of balance
+information but still assumes the preconditions of `modify`, otherwise might panic. -/
+def modifySlow [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ => δ)) :
+    Impl α (fun _ => δ) :=
+  match l with
+  | .leaf =>
+      match f none with
+      | none => .leaf
+      | some v => .inner 1 k v .leaf .leaf
+  | .inner sz k' v' l' r' =>
+      match compare k k' with
+      | .lt => balanceSlow k' v' (modifySlow k f l') r'
+      | .gt => balanceSlow k' v' l' (modifySlow k f r')
+      | .eq =>
+          match f v' with
+          | none => glueSlow l' r'
+          | some v => .inner sz k' v l' r'
+
+end Const
+
+/-- If the tree contains a mapping `(k', v)` with `k == k'`, adjust it to have mapping
+`(k', f k' v h)`, which `h : compare k k' = .eq`. If no such mapping is present, returns the
+tree unmodified. Note that this function is likely to be faster than `modify` because it never
+needs to rebalance the tree. -/
+def adjust [Ord α] (k : α) (f : (k' : α) → β k' → (compare k k' = .eq) → β k') (l : Impl α β) :
+    Impl α β :=
+  match l with
+  | .leaf => .leaf
+  | .inner sz k' v' l r =>
+    match h : compare k k' with
+    | .lt => .inner sz k' v' (adjust k f l) r
+    | .gt => .inner sz k' v' l (adjust k f r)
+    | .eq => .inner sz k' (f k' v' h) l r
 
 end Impl
 
