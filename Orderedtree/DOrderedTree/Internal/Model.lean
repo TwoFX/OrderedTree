@@ -62,6 +62,14 @@ theorem contains_eq_containsₘ [Ord α] (k : α) (l : Impl α β) :
 
 -- This needs to be improved to balanceL_eq_balanceLErase and balanceLErase_eq_balance
 
+theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
+  rw [balanceL_eq_balanceLErase, balanceLErase_eq_balance]
+
+theorem balanceR_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceR k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
+  rw [balanceR_eq_balanceRErase, balanceRErase_eq_balance]
+
 theorem balanceL_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balanceLSlow k v l r := by
   rw [balanceL.eq_def, balanceLSlow.eq_def]
@@ -158,10 +166,9 @@ theorem insert_eq_insertSlow [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
 
 theorem insert_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
     (insert k v l h).impl = insertₘ k v l := by
-  sorry
-  -- induction l, h using insert.induct k v <;>
-  --   simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
-  --     balance_eq_balanceSlow]
+  induction l, h using insert.induct k v <;>
+    simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
+      balance_eq_balanceSlow]
 
 end Impl
 
