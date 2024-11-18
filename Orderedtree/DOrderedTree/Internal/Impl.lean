@@ -13,7 +13,7 @@ import Lean.Elab.Tactic
 This file contains the basic definition implementing the functionality of the size-bounded trees.
 -/
 
--- set_option debug.byAsSorry true
+set_option debug.byAsSorry true
 
 set_option autoImplicit false
 set_option linter.all true
