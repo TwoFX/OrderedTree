@@ -12,7 +12,7 @@ import Orderedtree.DOrderedTree.Internal.Impl.Attr
 This file contains the basic definition implementing the functionality of the size-bounded trees.
 -/
 
-set_option debug.byAsSorry true
+-- set_option debug.byAsSorry true
 
 set_option autoImplicit false
 set_option linter.all true
@@ -256,11 +256,6 @@ theorem size_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceL k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balanceL.eq_def]; tree_tac
 
-@[tree_tac]
-theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    (balanceL k v l r hrb hlb hlr).Balanced := by
-  simp only [balanceL.eq_def]; tree_tac
-
 /-- Slower version of `balanceL` with weaker balancing assumptions that hold after erasing from
 the right side of the tree. -/
 @[inline]
@@ -369,11 +364,6 @@ theorem size_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balanceR k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balanceR.eq_def]; tree_tac
 
-@[tree_tac]
-theorem balanced_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    (balanceR k v l r hrb hlb hlr).Balanced := by
-  simp only [balanceR.eq_def]; tree_tac
-
 /-- Slower version of `balanceR` with weaker balancing assumptions that hold after erasing from
 the left side of the tree. -/
 @[inline]
@@ -450,11 +440,8 @@ def balanceRSlow (k : α) (v : β k) (l r : Impl α β) : Impl α β :=
 
 /-- Rebalances a tree after at most one element was added or removed from either subtree. -/
 def balance (k : α) (v : β k) (l r : Impl α β) (hl : Balanced l) (hr : Balanced r)
-    (h : BalancedAtRoot l.size r.size ∨
-      BalancedAtRoot (l.size + 1) (r.size) ∨
-      BalancedAtRoot (l.size) (r.size + 1) ∨
-      (1 ≤ l.size ∧ BalancedAtRoot (l.size - 1) r.size) ∨
-      (1 ≤ r.size ∧ BalancedAtRoot l.size (r.size - 1))) : Impl α β :=
+    (h : BalanceLErasePrecond l.size r.size ∨
+      BalanceLErasePrecond r.size l.size) : Impl α β :=
   match l with
   | .leaf =>
     match r with
@@ -512,11 +499,134 @@ theorem size_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balance k v l r hrb hlb hlr).size = l.size + 1 + r.size := by
   simp only [balance.eq_def]; tree_tac
 
-set_option maxHeartbeats 0 in
+theorem balanceL_eq_balanceLErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceL k v l r hlb hrb hlr = balanceLErase k v l r hlb hrb (by tree_tac) := by
+  rw [balanceL.eq_def, balanceLErase.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+    contradiction
+  · dsimp only
+    split
+    all_goals dsimp only
+    split
+    · split
+      · dsimp only
+      · contradiction
+      · contradiction
+    · rfl
+
+theorem balanceR_eq_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceR k v l r hlb hrb hlr = balanceRErase k v l r hlb hrb (by tree_tac) := by
+  rw [balanceR.eq_def, balanceRErase.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+    contradiction
+  · dsimp only
+    split
+    all_goals dsimp only
+    split
+    · split
+      · dsimp only
+      · contradiction
+      · contradiction
+    · rfl
+
+theorem balanceLErase_eq_balance' {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr hlr'} :
+    balanceLErase k v l r hlb hrb hlr = balance k v l r hlb hrb hlr' := by
+  rw [balanceLErase.eq_def, balance.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+  · dsimp only
+    split
+    · dsimp only
+      split
+      all_goals try (exfalso; tree_tac)
+      congr
+      tree_tac
+    · dsimp only
+      split
+      · split
+        · split
+          · rename_i h
+            split
+            · exfalso; tree_tac
+            · simp [h]
+          · rename_i h
+            split
+            · exfalso; tree_tac
+            · simp [h]
+        · contradiction
+        · contradiction
+      · split
+        · exfalso; tree_tac
+        · rfl
+
+theorem balanceLErase_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceLErase k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) :=
+  balanceLErase_eq_balance'
+
+theorem balanceRErase_eq_balance' {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr hlr'} :
+    balanceRErase k v l r hlb hrb hlr = balance k v l r hlb hrb hlr' := by
+  rw [balanceRErase.eq_def, balance.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+  · dsimp only
+    split
+    · dsimp only
+      split
+      all_goals try (exfalso; tree_tac)
+      congr
+      tree_tac
+    · dsimp only
+      split
+      · split
+        · dsimp only
+        · contradiction
+        · contradiction
+      · split
+        · split
+          · split
+            · exfalso; tree_tac
+            · exfalso; tree_tac
+          · contradiction
+          · contradiction
+        · rfl
+
+theorem balanceRErase_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceRErase k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) :=
+  balanceRErase_eq_balance'
+
+theorem balance_eq_or_balance_eq {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (∃ hlr', balance k v l r hlb hrb hlr = balanceLErase k v l r hlb hrb hlr') ∨
+    (∃ hlr', balance k v l r hlb hrb hlr = balanceRErase k v l r hlb hrb hlr') := by
+  obtain h|h := hlr
+  · exact Or.inl ⟨h, balanceLErase_eq_balance.symm⟩
+  · exact Or.inr ⟨h, balanceRErase_eq_balance.symm⟩
+
+@[tree_tac]
+theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balanceL k v l r hrb hlb hlr).Balanced := by
+  simpa only [balanceL_eq_balanceLErase] using balanced_balanceLErase
+
+@[tree_tac]
+theorem balanced_balanceR {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    (balanceR k v l r hrb hlb hlr).Balanced := by
+  simpa only [balanceR_eq_balanceRErase] using balanced_balanceRErase
+
 @[tree_tac]
 theorem balanced_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     (balance k v l r hlb hrb hlr).Balanced := by
-  sorry
+  obtain ⟨_, h⟩|⟨_, h⟩ := balance_eq_or_balance_eq <;> rw [h]
+  · exact balanced_balanceLErase
+  · exact balanced_balanceRErase
 
 /-- Slow version of `balance` which can be used in the complete absence of balancing information
 but still assumes that the preconditions of `balance` are satisfied

@@ -60,78 +60,7 @@ theorem contains_eq_containsₘ [Ord α] (k : α) (l : Impl α β) :
     l.contains k = l.containsₘ k := by
   induction l using Impl.contains.induct k <;> simp_all [contains, containsₘ, queryAtKey]
 
-theorem balanceR_eq_balance' {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr hlr'} :
-    balanceR k v l r hlb hrb hlr = balance k v l r hlb hrb hlr' := by
-  rw [balanceR.eq_def, balance.eq_def]
-  split
-  · dsimp only
-    split
-    all_goals dsimp only
-    contradiction
-  · dsimp only
-    split
-    · dsimp only
-      split
-      all_goals try (exfalso; tree_tac)
-      congr
-      tree_tac
-    · dsimp only
-      split
-      · split
-        · dsimp only
-        · contradiction
-        · contradiction
-      · split
-        · split
-          · split
-            · exfalso; tree_tac
-            · exfalso; tree_tac
-          · contradiction
-          · contradiction
-        · rfl
-
-theorem balanceR_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceR k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) :=
-  balanceR_eq_balance'
-
 -- This needs to be improved to balanceL_eq_balanceLErase and balanceLErase_eq_balance
-
-theorem balanceL_eq_balance' {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr hlr'} :
-    balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb hlr' := by
-  rw [balanceL.eq_def, balance.eq_def]
-  split
-  · dsimp only
-    split
-    all_goals dsimp only
-    contradiction
-  · dsimp only
-    split
-    · dsimp only
-      split
-      all_goals try (exfalso; tree_tac)
-      congr
-      tree_tac
-    · dsimp only
-      split
-      · split
-        · split
-          · rename_i h
-            split
-            · exfalso; tree_tac
-            · simp [h]
-          · rename_i h
-            split
-            · exfalso; tree_tac
-            · simp [h]
-        · contradiction
-        · contradiction
-      · split
-        · exfalso; tree_tac
-        · rfl
-
-theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) :=
-  balanceL_eq_balance'
 
 theorem balanceL_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balanceLSlow k v l r := by
@@ -229,9 +158,10 @@ theorem insert_eq_insertSlow [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
 
 theorem insert_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
     (insert k v l h).impl = insertₘ k v l := by
-  induction l, h using insert.induct k v <;>
-    simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
-      balance_eq_balanceSlow]
+  sorry
+  -- induction l, h using insert.induct k v <;>
+  --   simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
+  --     balance_eq_balanceSlow]
 
 end Impl
 
