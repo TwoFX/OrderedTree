@@ -5,7 +5,6 @@ Authors: Markus Himmel
 -/
 import Orderedtree.Classes.LawfulEqOrd
 import Orderedtree.DOrderedTree.Internal.Impl.Attr
-import Lean.Elab.Tactic
 
 /-!
 # Low-level implementation of the size-bounded tree
@@ -20,7 +19,7 @@ set_option linter.all true
 
 universe u v w
 
-variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type v}
+variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
 namespace Std.DOrderedTree.Internal
 
@@ -241,7 +240,7 @@ def balanceL (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb : Ba
   | inner rs _ _ _ _ => match l with
     | leaf => .inner (1 + rs) k v .leaf r
     | inner ls lk lv ll lr =>
-        if hlsd : ls > delta * rs then match ll, lr with
+        if hlsd : delta * rs < ls then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
                 .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v (inner lrs lrk lrv lrl lrr) r)
@@ -282,7 +281,7 @@ def balanceLErase (k : α) (v : β k) (l r : Impl α β) (hlb : Balanced l) (hrb
   | r@(inner rs _ _ _ _) => match l with
     | leaf => .inner (1 + rs) k v .leaf r
     | l@(inner ls lk lv ll lr) =>
-        if hlsd : ls > delta * rs then match ll, lr with
+        if hlsd : delta * rs < ls then match ll, lr with
           | inner lls _ _ _ _, inner lrs lrk lrv lrl lrr =>
               if lrs < ratio * lls then
                 .inner (1 + ls + rs) lk lv ll (.inner (1 + rs + lrs) k v lr r)
@@ -485,7 +484,7 @@ def balance (k : α) (v : β k) (l r : Impl α β) (hl : Balanced l) (hr : Balan
           .inner (1 + ls) lrk lrv (.inner (1 + lls + lrl.size) lk lv ll lrl)
             (.inner (1 + lrr.size) k v lrr .leaf)
     | .inner rs rk rv rl rr =>
-      if h₁ : rs > delta * ls then
+      if h₁ : delta * ls < rs then
         match rl, rr with
         | .inner rls rlk rlv rll rlr, .inner rrs _ _ _ _ =>
             if rls < ratio * rrs then
@@ -495,7 +494,7 @@ def balance (k : α) (v : β k) (l r : Impl α β) (hl : Balanced l) (hr : Balan
                 (.inner (1 + rrs + rlr.size) rk rv rlr rr)
         | .leaf, _ => False.elim ✓
         | _, .leaf => False.elim ✓
-      else if h₂ : ls > delta * rs then
+      else if h₂ : delta * rs < ls then
         match ll, lr with
         | .inner lls _ _ _ _, .inner lrs lrk lrv lrl lrr =>
             if lrs < ratio * lls then
@@ -661,17 +660,17 @@ def glue (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) (hlr : BalancedA
     Impl α β :=
   match l with
   | .leaf => r
-  | l@hl₀:(.inner sz k v l' r') =>
+  | .inner sz k v l' r' =>
     match r with
     | .leaf => l
-    | r@hr₀:(.inner sz' k' v' l'' r'') =>
+    | .inner sz' k' v' l'' r'' =>
       if sz < sz' then
         let d := minView k' v' l'' r'' ✓ ✓ ✓
-        balanceLErase d.k d.v l d.tree.impl (hl₀ ▸ hl) ✓
+        balanceLErase d.k d.v (.inner sz k v l' r') d.tree.impl hl ✓
           (by simp only [tree_tac] at hl hr hlr; tree_tac)
       else
         let d := maxView k v l' r' ✓ ✓ ✓
-        balanceRErase d.k d.v d.tree.impl r ✓ (hr₀ ▸ hr)
+        balanceRErase d.k d.v d.tree.impl (.inner sz' k' v' l'' r'') ✓ hr
           (by simp only [tree_tac] at hl hr hlr; tree_tac)
 
 @[tree_tac]
