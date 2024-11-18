@@ -819,6 +819,7 @@ def link2Slow (l r : Impl α β) : Impl α β :=
 ## Modification operations
 -/
 
+
 -- TODO: inline annotations
 -- TODO: rename slow to !
 
@@ -837,6 +838,10 @@ attribute [tree_tac] Tree₂.balanced_impl
 /-- An empty tree. -/
 @[inline]
 def empty : Impl α β :=
+  .leaf
+
+@[tree_tac]
+theorem balanced_empty : (empty : Impl α β).Balanced :=
   .leaf
 
 attribute [tree_tac] or_true true_or
@@ -1117,6 +1122,34 @@ def adjust [Ord α] (k : α) (f : (k' : α) → β k' → (compare k k' = .eq) �
     | .lt => .inner sz k' v' (adjust k f l) r
     | .gt => .inner sz k' v' l (adjust k f r)
     | .eq => .inner sz k' (f k' v' h) l r
+
+/-- Flattens a tree into a list of key-value pairs. This function is defined for verification
+purposes and should not be executed because it is very inefficient. -/
+def toListModel : Impl α β → List ((a : α) × β a)
+  | .leaf => []
+  | .inner _ k v l r => l.toListModel ++ ⟨k, v⟩ :: r.toListModel
+
+/-- The binary search tree property. -/
+def Ordered [Ord α] (l : Impl α β) : Prop :=
+  l.toListModel.Pairwise (fun a b => compare a.1 b.1 = .lt)
+
+/-- Well-formedness of ordered trees. -/
+inductive WF [Ord α] : Impl α β → Prop where
+  /-- This is the actual well-formedness invariant: the tree must be a balanced BST. -/
+  | wf {l} : Balanced l → Ordered l → WF l
+  /-- The empty tree is well-formed. Later shown to be subsumed by `.wf`. -/
+  | empty : WF .empty
+  /-- `insert` preserves well-formedness. Later shown to be subsumed by `.wf`. -/
+  | insert {l h k v} : WF l → WF (l.insert k v h).impl
+
+set_option debug.byAsSorry false
+
+/-- A well-formed tree is balanced. This is needed here already because we need to know that the
+tree is balanced to call the optimized modification functions. -/
+theorem WF.balanced [Ord α] {l : Impl α β} : WF l → l.Balanced
+  | .wf h _ => h
+  | .empty => balanced_empty
+  | .insert _ => Tree₂.balanced_impl _
 
 end Impl
 
