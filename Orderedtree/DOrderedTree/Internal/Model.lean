@@ -20,6 +20,10 @@ namespace Std.DOrderedTree.Internal
 
 namespace Impl
 
+/-!
+## General infrastructure
+-/
+
 /-- General "query the value at a given key" function. -/
 def queryAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → δ) (l : Impl α β) : δ :=
   match l with
@@ -31,36 +35,60 @@ def queryAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → δ) (l : Imp
     | .gt => queryAtKey k f r
 
 /-- General "update the mapping for a given key" function. -/
-def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a)) :
-    Impl α β → Impl α β
-| leaf => match f none with
-          | none => .leaf
-          | some ⟨k', v'⟩ => .inner 1 k' v' .leaf .leaf
-| inner sz ky y l r =>
-  match compare k ky with
-  | .lt =>
-      let newL := updateAtKey k f l
-      balanceSlow ky y newL r
-  | .eq => match f (some ⟨ky, y⟩) with
-           | none => glueSlow l r
-           | some ⟨ky', y'⟩ => .inner sz ky' y' l r
-  | .gt =>
-      let newR := updateAtKey k f r
-      balanceSlow ky y l newR
+def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a))
+    (l : Impl α β) (hl : Balanced l) : Tree₃ α β (l.size - 1) l.size (l.size + 1) :=
+  match l with
+  | leaf => match f none with
+            | none => ⟨.leaf, by tree_tac, by tree_tac⟩
+            | some ⟨k', v'⟩ => ⟨.inner 1 k' v' .leaf .leaf, by tree_tac, by tree_tac⟩
+  | inner sz ky y l r =>
+    match compare k ky with
+    | .lt =>
+        let ⟨newL, h₁, h₂⟩ := updateAtKey k f l (by tree_tac)
+        ⟨balance ky y newL r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+    | .eq => match f (some ⟨ky, y⟩) with
+             | none =>
+               ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+             | some ⟨ky', y'⟩ => ⟨.inner sz ky' y' l r, by tree_tac, by tree_tac⟩
+    | .gt =>
+        let ⟨newR, h₁, h₂⟩ := updateAtKey k f r (by tree_tac)
+        ⟨balance ky y l newR (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+
+/-!
+## Model functions
+-/
 
 /-- Model implementation of the `contains` function. -/
 def containsₘ [Ord α] (k : α) (l : Impl α β) : Bool :=
   queryAtKey k Option.isSome l
 
 /-- Model implementation of the `insert` function. -/
-def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) : Impl α β :=
-  updateAtKey k (fun _ => some ⟨k, v⟩) l
+def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : Impl α β :=
+  updateAtKey k (fun _ => some ⟨k, v⟩) l h |>.impl
+
+/-!
+## Helper theorems for reasoning with key-value pairs
+-/
+
+theorem balanceLSlow_pair_congr {k : α} {v : β k} {k' : α} {v' : β k'}
+    (h : (⟨k, v⟩ : (a : α) × β a) = ⟨k', v'⟩) {l l' r r' : Impl α β}
+    (hl : l = l') (hr : r = r') :
+    balanceLSlow k v l r = balanceLSlow k' v' l' r' := by
+  cases h; cases hl; cases hr; rfl
+
+theorem balanceRSlow_pair_congr {k : α} {v : β k} {k' : α} {v' : β k'}
+    (h : (⟨k, v⟩ : (a : α) × β a) = ⟨k', v'⟩) {l l' r r' : Impl α β}
+    (hl : l = l') (hr : r = r') :
+    balanceRSlow k v l r = balanceRSlow k' v' l' r' := by
+  cases h; cases hl; cases hr; rfl
+
+/-!
+## Equivalence of function to model functions
+-/
 
 theorem contains_eq_containsₘ [Ord α] (k : α) (l : Impl α β) :
     l.contains k = l.containsₘ k := by
   induction l using Impl.contains.induct k <;> simp_all [contains, containsₘ, queryAtKey]
-
--- This needs to be improved to balanceL_eq_balanceLErase and balanceLErase_eq_balance
 
 theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
@@ -98,7 +126,7 @@ theorem balanceRErase_eq_balanceRSlow {k : α} {v : β k} {l r : Impl α β} {hl
   all_goals try contradiction
   all_goals simp_all [-Nat.not_lt]
 
-theorem balance_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+theorem balance_eq_balanceSlow (k : α) (v : β k) (l r : Impl α β) (hlb hrb hlr) :
     balance k v l r hlb hrb hlr = balanceSlow k v l r := by
   rw [balance.eq_def, balanceSlow.eq_def]
   repeat' (split; dsimp)
@@ -135,18 +163,6 @@ theorem maxView_tree_impl_eq_maxViewSlow {k : α} {v : β k} {l r : Impl α β} 
   induction k, v, l, r, hl, hr, hlr using maxView.induct <;>
     simp_all [maxView, maxViewSlow, balanceLErase_eq_balanceLSlow]
 
-theorem balanceLSlow_pair_congr {k : α} {v : β k} {k' : α} {v' : β k'}
-    (h : (⟨k, v⟩ : (a : α) × β a) = ⟨k', v'⟩) {l l' r r' : Impl α β}
-    (hl : l = l') (hr : r = r') :
-    balanceLSlow k v l r = balanceLSlow k' v' l' r' := by
-  cases h; cases hl; cases hr; rfl
-
-theorem balanceRSlow_pair_congr {k : α} {v : β k} {k' : α} {v' : β k'}
-    (h : (⟨k, v⟩ : (a : α) × β a) = ⟨k', v'⟩) {l l' r r' : Impl α β}
-    (hl : l = l') (hr : r = r') :
-    balanceRSlow k v l r = balanceRSlow k' v' l' r' := by
-  cases h; cases hl; cases hr; rfl
-
 theorem glue_eq_glueSlow {l r : Impl α β} {hl hr hlr} :
     glue l r hl hr hlr = glueSlow l r := by
   rw [glue.eq_def, glueSlow.eq_def]
@@ -165,7 +181,7 @@ theorem insert_eq_insertSlow [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
     simp_all [insert, insertSlow, balanceL_eq_balanceLSlow, balanceR_eq_balanceRSlow]
 
 theorem insert_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
-    (insert k v l h).impl = insertₘ k v l := by
+    (insert k v l h).impl = insertₘ k v l h := by
   induction l, h using insert.induct k v <;>
     simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
       balance_eq_balanceSlow]
