@@ -271,7 +271,7 @@ theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
   simp only [List.pairwise_append] at hlo ⊢
   refine ⟨⟨hlo.1.1, Option.pairwise_toList, ?_⟩, ⟨hlo.2.1, ?_⟩⟩
   · intro a ha b hb
-    have := hlo.2.2 a (List.mem_append_of_mem_left _ ha)
+    have := hlo.2.2 a (List.mem_append_left _ ha)
     clear hlo
     simp at ha hb
     have : compare k b.fst = .eq := by
@@ -281,7 +281,7 @@ theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
   · intro a ha b hb
     rw [List.mem_append] at ha
     obtain ha|ha := ha
-    · exact hlo.2.2 a (List.mem_append_of_mem_left _ ha) _ hb
+    · exact hlo.2.2 a (List.mem_append_left _ ha) _ hb
     · simp at ha
       have h₀ : compare k a.fst = .eq := by
         apply hf _ _ _ ha
