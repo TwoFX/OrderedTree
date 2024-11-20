@@ -158,23 +158,50 @@ theorem toListModel_find?_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
   · simp [hcmp]
   · exact Ordered.compare_left_not_beq_eq ho (Ordering.isLE_of_eq_lt (OrientedCmp.lt_of_gt hcmp))
 
-theorem toListModel_find?_of_eq [Ord α] {k : α} {sz k' v' l r} (hcmp : compare k k' = .eq) :
-    (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) = some ⟨k', v'⟩ := sorry
+theorem toListModel_find?_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) = some ⟨k', v'⟩ := by
+  rw [toListModel_inner, List.find?_append, List.find?_eq_none.2, Option.none_or,
+    List.find?_cons_of_pos]
+  · simp_all
+  · exact Ordered.compare_left_not_beq_eq ho (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hcmp))
 
-theorem toListModel_find?_of_lt [Ord α] {k : α} {sz k' v' l r} (hcmp : compare k k' = .lt) :
+theorem Option.or_eq_left {o o' : Option α} (h : o' = none) : o.or o' = o := by
+  cases h; simp
+
+theorem toListModel_find?_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
     (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) =
-      l.toListModel.find? (compare k ·.1 == .eq) := sorry
+      l.toListModel.find? (compare k ·.1 == .eq) := by
+  rw [toListModel_inner, List.find?_append, Option.or_eq_left]
+  rw [List.find?_cons_of_neg _ (by simp [hcmp])]
+  exact List.find?_eq_none.2 (fun p hp => by simp [TransCmp.lt_trans hcmp (ho.compare_right hp)])
 
-theorem toListModel_filter_lt_of_gt [Ord α] {k : α} {sz k' v' l r} (hcmp : compare k k' = .gt) :
+theorem toListModel_filter_lt_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
     (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .lt) =
-      r.toListModel.filter (compare k ·.1 == .lt) := sorry
+      r.toListModel.filter (compare k ·.1 == .lt) := by
+  rw [toListModel_inner, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append,
+    List.filter_cons_of_neg (by simp [hcmp])]
+  exact fun p hp => by simp [OrientedCmp.gt_of_lt <|
+    TransCmp.lt_trans (ho.compare_left hp) (OrientedCmp.lt_of_gt hcmp)]
 
-theorem toListModel_filter_lt_of_eq [Ord α] {k : α} {sz k' v' l r} (hcmp : compare k k' = .eq) :
-    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .lt) = r.toListModel := sorry
+theorem toListModel_filter_lt_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .lt) = r.toListModel := by
+  rw [toListModel_inner, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append,
+    List.filter_cons_of_neg (by simp [hcmp]), List.filter_eq_self]
+  · exact fun p hp => by simp [TransCmp.lt_of_eq_of_lt hcmp (ho.compare_right hp)]
+  · exact fun p hp => by simp [OrientedCmp.gt_of_lt <|
+      TransCmp.lt_of_lt_of_eq (ho.compare_left hp) (OrientedCmp.eq_symm hcmp)]
 
-theorem toListModel_filter_lt_of_lt [Ord α] {k : α} {sz k' v' l r} (hcmp : compare k k' = .lt) :
+theorem toListModel_filter_lt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
     (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .lt) =
-      l.toListModel.filter (compare k ·.1 == .lt) ++ ⟨k', v'⟩ :: r.toListModel := sorry
+      l.toListModel.filter (compare k ·.1 == .lt) ++ ⟨k', v'⟩ :: r.toListModel := by
+  simp only [toListModel_inner, List.filter_append, hcmp, beq_self_eq_true, List.filter_cons_of_pos,
+    List.append_cancel_left_eq, List.cons.injEq, List.filter_eq_self, beq_iff_eq, true_and]
+  exact fun p hp => TransCmp.lt_trans hcmp (ho.compare_right hp)
 
 theorem toListModel_updateAtKey [Ord α] [TransOrd α] {k : α}
     {f : Option ((a : α) × β a) → Option ((a : α) × β a)} {l : Impl α β} (hlb : l.Balanced)
@@ -188,22 +215,22 @@ theorem toListModel_updateAtKey [Ord α] [TransOrd α] {k : α}
   · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hup hb' ih
     simp only [updateAtKey, hcmp]
     rw [toListModel_balance, toListModel_filter_gt_of_lt hcmp hlo,
-      toListModel_filter_lt_of_lt hcmp, toListModel_find?_of_lt hcmp, ih hlo.left]
+      toListModel_filter_lt_of_lt hcmp hlo, toListModel_find?_of_lt hcmp hlo, ih hlo.left]
     simp
   · rename_i sz k' v' l r hl hcmp hf hl'
     simp only [updateAtKey, hcmp, hf]
-    rw [toListModel_glue, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp, hf,
-      toListModel_filter_lt_of_eq hcmp]
+    rw [toListModel_glue, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp hlo,
+      hf, toListModel_filter_lt_of_eq hcmp hlo]
     simp
   · rename_i sz k' v' l r hl hcmp k'' v'' hf hl'
     simp only [updateAtKey, hcmp, hf]
-    rw [toListModel_inner, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp,
-      toListModel_filter_lt_of_eq hcmp, hf]
+    rw [toListModel_inner, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp hlo,
+      toListModel_filter_lt_of_eq hcmp hlo, hf]
     simp
   · rename_i sz k' v' l r hb hcmp l' hl'1 hl'2 hup hb' ih
     simp only [updateAtKey, hcmp]
     rw [toListModel_filter_gt_of_gt hcmp hlo, toListModel_find?_of_gt hcmp hlo,
-      toListModel_filter_lt_of_gt hcmp, toListModel_balance, ih hlo.right]
+      toListModel_filter_lt_of_gt hcmp hlo, toListModel_balance, ih hlo.right]
     simp
 
 theorem toListModel_eq_append [Ord α] [TransOrd α] (k : α) {l : Impl α β} (ho : l.Ordered) :
@@ -213,15 +240,15 @@ theorem toListModel_eq_append [Ord α] [TransOrd α] (k : α) {l : Impl α β} (
   induction l
   · rename_i sz k' v l r ih₁ ih₂
     cases hcmp : compare k k'
-    · rw [toListModel_filter_gt_of_lt hcmp ho, toListModel_find?_of_lt hcmp,
-        toListModel_filter_lt_of_lt hcmp, toListModel_inner]
+    · rw [toListModel_filter_gt_of_lt hcmp ho, toListModel_find?_of_lt hcmp ho,
+        toListModel_filter_lt_of_lt hcmp ho, toListModel_inner]
       conv => lhs; rw [ih₁ ho.left]
       simp
-    · rw [toListModel_filter_gt_of_eq hcmp ho, toListModel_find?_of_eq hcmp,
-        toListModel_filter_lt_of_eq hcmp, toListModel_inner]
+    · rw [toListModel_filter_gt_of_eq hcmp ho, toListModel_find?_of_eq hcmp ho,
+        toListModel_filter_lt_of_eq hcmp ho, toListModel_inner]
       simp
     · rw [toListModel_filter_gt_of_gt hcmp ho, toListModel_find?_of_gt hcmp ho,
-        toListModel_filter_lt_of_gt hcmp, toListModel_inner]
+        toListModel_filter_lt_of_gt hcmp ho, toListModel_inner]
       conv => lhs; rw [ih₂ ho.right]
       simp
   · simp
