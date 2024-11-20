@@ -5,6 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.Model
 import Orderedtree.Classes.TransOrd
+import Std.Data.DHashMap.Internal.List.Associative
 
 /-!
 # Low-level proofs about size-bounded trees
@@ -87,7 +88,7 @@ theorem toListModel_glue {l r : Impl α β} {hl hr hlr} :
   simp
 
 /-!
-## Verification of model functions
+## Lemmas about the `Ordered` predicate
 -/
 
 theorem Ordered.left [Ord α] {sz k v l r} (h : (.inner sz k v l r : Impl α β).Ordered) :
@@ -123,6 +124,10 @@ theorem Ordered.compare_right_not_beq_gt [Ord α] [TransOrd α] {k : α} {sz k' 
     (p) (hp : p ∈ r.toListModel) : ¬(compare k p.1 == .gt) := by
   suffices compare k p.fst = .lt by simp [this]
   exact TransCmp.lt_of_isLE_of_lt hcmp (ho.compare_right hp)
+
+/-!
+## Verification of model functions
+-/
 
 theorem toListModel_filter_gt_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
     (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
@@ -288,6 +293,67 @@ theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
       exact TransCmp.lt_of_eq_of_lt (OrientedCmp.eq_symm h₀) h₁
 
 /-!
+## Connecting the ordered trees machinery to the hash map machinery
+-/
+
+/-- Internal function to derive a `BEq` instance from an `Ord` instance in order to connect the
+verification machinery for ordered trees to the verification machinery for hash maps. -/
+def beqOfOrd [Ord α] : BEq α where
+  beq a b := compare a b == .eq
+
+attribute [local instance] beqOfOrd
+
+@[local simp]
+theorem beq_eq [Ord α] {a b : α} : (a == b) = (compare a b == .eq) :=
+  rfl
+
+@[local instance]
+theorem equivBEq_of_transOrd [Ord α] [TransOrd α] : EquivBEq α where
+  symm {a b} h := by simp_all [OrientedCmp.eq_comm]
+  trans h₁ h₂ := by simp_all only [beq_eq, beq_iff_eq]; exact TransCmp.eq_trans h₁ h₂
+  refl := by simp
+
+open Std.DHashMap.Internal.List
+
+theorem exists_cell_of_updateAtKey [Ord α] [TransOrd α] (l : Impl α β) (hlb : l.Balanced)
+    (hlo : l.Ordered) (k : α)
+    (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : ∃ (l' : List ((a : α) × β a)),
+    l.toListModel.Perm ((l.toListModel.find? (compare k ·.1 == .eq)).toList ++ l') ∧
+    (l.updateAtKey k f hlb).impl.toListModel.Perm
+      ((f (l.toListModel.find? (compare k ·.1 == .eq))).toList ++ l') ∧
+    (containsKey k l' = false) := by
+  refine ⟨l.toListModel.filter (compare k ·.1 == .gt) ++
+    l.toListModel.filter (compare k ·.1 == .lt), ?_, ?_, ?_⟩
+  · conv => lhs; rw [toListModel_eq_append k hlo]
+    simpa using List.perm_append_comm_assoc _ _ _
+  · conv => lhs; rw [toListModel_updateAtKey hlb hlo]
+    simpa using List.perm_append_comm_assoc _ _ _
+  · rw [containsKey_eq_false_iff_forall_mem_keys, keys_eq_map]
+    simp only [List.map_append, List.mem_append, List.mem_map, List.mem_filter, beq_iff_eq, beq_eq,
+      beq_eq_false_iff_ne, ne_eq]
+    rintro a (⟨p, ⟨⟨-, hp⟩, rfl⟩⟩|⟨p, ⟨⟨-, hp⟩, rfl⟩⟩) <;> simp_all
+
+theorem Ordered.distinctKeys [Ord α] {l : Impl α β} (h : l.Ordered) :
+    DistinctKeys l.toListModel :=
+  ⟨by rw [keys_eq_map, List.pairwise_map]; exact h.imp (fun h => by simp_all)⟩
+
+/-- This is the general theorem to show that modification operations are correct. -/
+theorem toListModel_updateAtKey_perm [Ord α] [TransOrd α]
+    {l : Impl α β} (hlb : l.Balanced) (hlo : l.Ordered) {k : α}
+    {f : Option ((a : α) × β a) → Option ((a : α) × β a)}
+    {g : List ((a : α) × β a) → List ((a : α) × β a)}
+    (hfg : ∀ {l}, (∀ (p : (a : α) × β a), l = some p → p.1 == k) → (f l).toList = g l.toList)
+    (hg₁ : ∀ {l l'}, DistinctKeys l → List.Perm l l' → List.Perm (g l) (g l'))
+    (hg₂ : ∀ {l l'}, containsKey k l' = false → g (l ++ l') = g l ++ l') :
+    List.Perm (l.updateAtKey k f hlb).impl.toListModel (g l.toListModel) := by
+  obtain ⟨l, h₁, h₂, h₃⟩ := exists_cell_of_updateAtKey l hlb hlo k f
+  refine h₂.trans (List.Perm.trans ?_ (hg₁ hlo.distinctKeys h₁).symm)
+  rwa [hfg, hg₂]
+  simp only [Option.mem_def, beq_eq, beq_iff_eq]
+  intro p hp
+  simpa using OrientedCmp.eq_symm (by simpa using (List.find?_eq_some_iff_append.1 hp).1)
+
+/-!
 ## Verification of modification operations
 -/
 
@@ -307,9 +373,18 @@ theorem ordered_empty [Ord α] : (.empty : Impl α β).Ordered := by
 -/
 
 theorem ordered_insertₘ [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
-    (hlo : l.Ordered) : (l.insertₘ k v hlb).Ordered := by
-  apply ordered_updateAtKey _ _ hlo
-  simp
+    (hlo : l.Ordered) : (l.insertₘ k v hlb).Ordered :=
+  ordered_updateAtKey (by simp) _ hlo
+
+theorem toListModel_insertₘ [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
+    (hlo : l.Ordered) : (l.insertₘ k v hlb).toListModel.Perm (insertEntry k v l.toListModel) := by
+  refine toListModel_updateAtKey_perm _ hlo ?_ insertEntry_of_perm
+    insertEntry_append_of_not_contains_right
+  rintro (_|l) hl
+  · simp
+  · simp only [Option.toList_some]
+    rw [insertEntry_of_containsKey (containsKey_cons_of_beq (hl l rfl)),
+      replaceEntry_cons_of_true (hl l rfl)]
 
 /-!
 ### `insert`
@@ -318,6 +393,12 @@ theorem ordered_insertₘ [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl �
 theorem ordered_insert [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
     (hlo : l.Ordered) : (l.insert k v hlb).impl.Ordered := by
   simpa only [insert_eq_insertₘ] using ordered_insertₘ hlb hlo
+
+theorem toListModel_insert [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
+    (hlo : l.Ordered) :
+    (l.insert k v hlb).impl.toListModel.Perm (insertEntry k v l.toListModel) := by
+  rw [insert_eq_insertₘ]
+  exact toListModel_insertₘ hlb hlo
 
 /-!
 ## Deducing that well-formed trees are ordered

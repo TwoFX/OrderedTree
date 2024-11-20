@@ -159,4 +159,12 @@ theorem TransCmp.lt_of_isLE_of_lt [TransCmp cmp] {a b c : α} (hab : (cmp a b).i
   · exact TransCmp.lt_trans hab hbc
   · exact TransCmp.lt_of_eq_of_lt hab hbc
 
+theorem TransCmp.eq_trans [TransCmp cmp] {a b c : α} (hab : cmp a b = .eq)
+    (hbc : cmp b c = .eq) : cmp a c = .eq := by
+  apply Ordering.eq_eq_of_isLE_of_isLE_swap
+  · exact TransCmp.le_trans (Ordering.isLE_of_eq_eq hab) (Ordering.isLE_of_eq_eq hbc)
+  · rw [← OrientedCmp.eq_swap]
+    exact TransCmp.le_trans (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hbc))
+      (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hab))
+
 end
