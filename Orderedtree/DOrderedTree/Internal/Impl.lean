@@ -5,6 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.Classes.LawfulEqOrd
 import Orderedtree.DOrderedTree.Internal.Impl.Attr
+import Orderedtree.Classes.TransOrd
 
 /-!
 # Low-level implementation of the size-bounded tree
@@ -1245,7 +1246,7 @@ def Ordered [Ord α] (l : Impl α β) : Prop :=
 /-- Well-formedness of ordered trees. -/
 inductive WF [Ord α] : Impl α β → Prop where
   /-- This is the actual well-formedness invariant: the tree must be a balanced BST. -/
-  | wf {l} : Balanced l → Ordered l → WF l
+  | wf {l} : Balanced l → (∀ [TransOrd α], Ordered l) → WF l
   /-- The empty tree is well-formed. Later shown to be subsumed by `.wf`. -/
   | empty : WF .empty
   /-- `insert` preserves well-formedness. Later shown to be subsumed by `.wf`. -/

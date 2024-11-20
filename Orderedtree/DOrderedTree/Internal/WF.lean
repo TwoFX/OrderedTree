@@ -319,9 +319,13 @@ theorem ordered_insert [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α �
     (hlo : l.Ordered) : (l.insert k v hlb).impl.Ordered := by
   simpa only [insert_eq_insertₘ] using ordered_insertₘ hlb hlo
 
+/-!
+## Deducing that well-formed trees are ordered
+-/
+
 theorem WF.ordered [Ord α] [TransOrd α] {l : Impl α β} (h : WF l) : l.Ordered := by
   induction h
-  · assumption
+  · next h => exact h
   · exact ordered_empty
   · exact ordered_insert ‹_› ‹_›
 
