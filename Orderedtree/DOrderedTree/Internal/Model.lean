@@ -24,34 +24,204 @@ namespace Impl
 ## General infrastructure
 -/
 
-/-- General "query the value at a given key" function. -/
-def queryAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → δ) (l : Impl α β) : δ :=
-  match l with
-  | .leaf => f none
+/-- Type for representing the place in a binary search tree where a mapping for `k` could live. -/
+structure Cell (α : Type u) [Ord α] (β : α → Type v) (k : α) where
+  /-- The mapping. -/
+  inner : Option ((a : α) × β a)
+  /-- If there is a mapping, then it has a matching key. -/
+  property : ∀ [OrientedOrd α], ∀ p, inner = some p → compare k p.1 = .eq
+
+namespace Cell
+
+/-- Create a cell with a matching key. -/
+def ofEq [Ord α] {k : α} (k' : α) (v' : β k') (hcmp : ∀ [OrientedOrd α], compare k k' = .eq) :
+    Cell α β k :=
+  ⟨some ⟨k', v'⟩, by intro _ p hp; obtain rfl := Option.some_inj.1 hp; simpa using hcmp⟩
+
+/-- Create a cell with a matching key. -/
+def of [Ord α] (k : α) (v : β k) : Cell α β k :=
+  .ofEq k v (by intro; simp)
+
+@[simp] theorem ofEq_inner [Ord α] {k k' : α} {v' : β k'} {h} :
+  (Cell.ofEq k' v' h : Cell α β k).inner = some ⟨k', v'⟩ := rfl
+@[simp] theorem of_inner [Ord α] {k : α} {v : β k} : (Cell.of k v).inner = some ⟨k, v⟩ := rfl
+
+/-- Create an empty cell. -/
+def empty [Ord α] {k : α} : Cell α β k :=
+  ⟨none, by simp⟩
+
+@[simp] theorem empty_inner [Ord α] {k : α} : (Cell.empty : Cell α β k).inner = none := rfl
+
+def contains [Ord α] {k : α} (c : Cell α β k) : Bool :=
+  c.inner.isSome
+
+@[simp] theorem contains_of [Ord α] {k : α} {v : β k} : (Cell.of k v).contains = true := rfl
+@[simp] theorem contains_ofRq [Ord α] {k k' : α} {v' : β k'} {h} :
+    (Cell.ofEq k' v' h : Cell α β k).contains = true := rfl
+@[simp] theorem contains_empty [Ord α] {k : α} : (Cell.empty : Cell α β k).contains = false := rfl
+
+def get? [Ord α] [OrientedOrd α] [LawfulEqOrd α] {k : α} (c : Cell α β k) : Option (β k) :=
+  match h : c.inner with
+  | none => none
+  | some p => some (cast (congrArg β (eq_of_compare (c.property _ h)).symm) p.2)
+
+@[simp]
+theorem get?_empty [Ord α] [OrientedOrd α] [LawfulEqOrd α] {k : α} :
+    (Cell.empty : Cell α β k).get? = none :=
+  rfl
+
+def get [Ord α] [OrientedOrd α] [LawfulEqOrd α] {k : α} (c : Cell α β k) (h : c.contains) : β k :=
+  match hc : c.inner with
+  | none => False.elim (by simp [contains, hc] at h)
+  | some p => (cast (congrArg β (eq_of_compare (c.property _ hc)).symm) p.2)
+
+def toList [Ord α] {k : α} (c : Cell α β k) : List ((a : α) × β a) :=
+  c.inner.toList
+
+end Cell
+
+/-- General tree-traversal function. -/
+def applyPartition [Ord α] (k : α) (l : Impl α β)
+    (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α) × β a) → δ): δ :=
+  go [] l id []
+where
+  go (ll : List ((a : α) × β a)) (m : Impl α β) (hm : l.contains k → m.contains k) (rr : List ((a : α) × β a)) : δ :=
+  match m with
+  | .leaf => f ll .empty (by simp [contains] at hm; simp [hm]) rr
   | .inner _ k' v' l r =>
-    match compare k k' with
-    | .lt => queryAtKey k f l
-    | .eq => f (some ⟨k', v'⟩)
-    | .gt => queryAtKey k f r
+    match h : compare k k' with
+    | .lt => go ll l (fun hc => have := hm hc; by rw [← this, contains]; simp_all) (⟨k', v'⟩ :: r.toListModel ++ rr)
+    | .eq => f (ll ++ l.toListModel) (.ofEq k' v' h) (by simp) (r.toListModel ++ rr)
+    | .gt => go (ll ++ l.toListModel ++ [⟨k', v'⟩]) r (fun hc => have := hm hc; by rw [← this, contains]; simp_all) rr
+
+def applyCell [Ord α] (k : α) (l : Impl α β)
+    (f : (c : Cell α β k) → (l.contains k → c.contains) → δ) : δ :=
+  match l with
+  | .leaf => f .empty (by simp [contains])
+  | .inner _ k' v' l r =>
+    match hcmp : compare k k' with
+    | .lt => applyCell k l (fun c h => f c fun h' => h (by simpa [contains, hcmp] using h'))
+    | .eq => f (.ofEq k' v' hcmp) (by simp)
+    | .gt => applyCell k r (fun c h => f c fun h' => h (by simpa [contains, hcmp] using h'))
+
+theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
+    (f : (c : Cell α β k) → (l.contains k → c.contains) → δ) :
+    applyCell k l f = applyPartition k l (fun _ c hc _ => f c hc) := by
+  rw [applyPartition]
+  suffices ∀ L u v, (hL : l.contains k ↔ L.contains k) →
+      applyCell k l f = applyPartition.go k L (fun _ c hc _ => f c (hc ∘ hL.1)) u l hL.2 v from
+    this l [] [] Iff.rfl
+  intro L u v hL
+  induction l generalizing u v L
+  · rename_i sz k' v' l r ih₁ ih₂
+    simp only [applyCell, applyPartition.go]
+    split <;> rename_i hcmp
+    · exact ih₁ _ _ _ _ (by simpa [contains, hcmp] using hL)
+    · rfl
+    · exact ih₂ _ _ _ _ (by simpa [contains, hcmp] using hL)
+  · simp [applyCell, applyPartition, applyPartition.go]
+
+variable (α β) in
+/-- Data structure used by the general tree-traversal function `explore`. -/
+inductive ExplorationStep [Ord α] (k : α) where
+  /-- Needle was less than key at this node: return key-value pair and unexplored right subtree,
+      recusion will continue in left subtree. -/
+  | lt : (a : α) → compare k a = .lt → β a → List ((a : α) × β a) → ExplorationStep k
+  /-- Needle was equal to key at this node: return key-value pair and both unexplored subtrees,
+      recursion will terminate. -/
+  | eq : List ((a : α) × β a) → Cell α β k → List ((a : α) × β a) → ExplorationStep k
+  /-- Needle was larger than key at this node: return key-value pair and unexplored left subtree,
+      recusion will containue in right subtree. -/
+  | gt : List ((a : α) × β a) → (a : α) → compare k a = .gt → β a → ExplorationStep k
+
+/-- General tree-traversal function. -/
+def explore {γ : Type w} [Ord α] (k : α) (init : γ)
+    (inner : γ → ExplorationStep α β k → γ) (l : Impl α β) : γ :=
+  match l with
+  | .leaf => inner init (.eq [] .empty [])
+  | .inner _ ky y l r =>
+    match h : compare k ky with
+    | .lt => explore k (inner init <| .lt ky h y r.toListModel) inner l
+    | .eq => inner init <| .eq l.toListModel (Cell.ofEq ky y h) r.toListModel
+    | .gt => explore k (inner init <| .gt l.toListModel ky h y) inner r
+
+open ExplorationStep
+
+theorem applyPartition_go_step [Ord α] {k : α} {init : δ} (l₁ l₂) (l l' : Impl α β) (h)
+  (f : δ → ExplorationStep α β k → δ) :
+    applyPartition.go k l' (fun l' c _ r' => f init (.eq l' c r')) l₁ l h l₂ =
+    applyPartition.go k l' (fun l' c _ r' => f init (.eq (l₁ ++ l') c (r' ++ l₂))) [] l h [] := by
+  suffices ∀ l₃ l₄,
+    applyPartition.go k l' (fun l' c _ r' => f init (.eq (l₃ ++ l') c (r' ++ l₄))) l₁ l h l₂ =
+    applyPartition.go k l' (fun l' c _ r' => f init (.eq (l₃ ++ l₁ ++ l') c (r' ++ l₂ ++ l₄))) [] l h [] by
+    simpa using this [] []
+  intro l₃ l₄
+  induction l generalizing l₁ l₂ l₃ l₄
+  · rename_i sz k' v' l r ih₁ ih₂
+    simp only [applyPartition.go]
+    split <;> rename_i hcmp
+    · simp only [List.cons_append, List.append_assoc, List.append_nil]
+      rw [ih₁]
+      simp only [← List.append_assoc l₃]
+      rw [ih₁]
+      simp
+    · simp
+    · simp only [List.append_assoc, List.nil_append]
+      rw [ih₂]
+      simp only [← List.append_assoc l₃]
+      rw [ih₂]
+      simp
+  · simp [applyPartition.go]
+
+theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
+    (f : δ → ExplorationStep α β k → δ)
+    (hfr : ∀ {k hk v ll c rr r init}, f (f init (.lt k hk v r)) (.eq ll c rr) = f init (.eq ll c (rr ++ ⟨k, v⟩ :: r)))
+    (hfl : ∀ {k hk v ll c rr l init}, f (f init (.gt l k hk v)) (.eq ll c rr) = f init (.eq (l ++ ⟨k, v⟩ :: ll) c rr))
+    :
+    explore k init f l = applyPartition k l fun l c _ r => f init (.eq l c r) := by
+  rw [applyPartition]
+  suffices ∀ L, (h : L.contains k → l.contains k) →
+    explore k init f l = applyPartition.go k L (fun l_1 c x r => f init (eq l_1 c r)) [] l h [] from this l id
+  intro L hL
+  induction l generalizing init
+  · rename_i sz k' v' l r ih₁ ih₂
+    rw [explore, applyPartition.go]
+    split <;> rename_i hcmp
+    · simp [hcmp, contains] at hL
+      rw [ih₁ _ hL]
+      conv => rhs; rw [applyPartition_go_step]
+      simp
+      congr
+      ext ll c hc rr
+      apply hfr
+    · simp
+    · simp [hcmp, contains] at hL
+      rw [ih₂ _ hL]
+      conv => rhs; rw [applyPartition_go_step]
+      simp
+      congr
+      ext ll c hc rr
+      apply hfl
+  · simp [explore, applyPartition.go]
 
 /-- General "update the mapping for a given key" function. -/
-def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a : α) × β a))
+def updateCell [Ord α] (k : α) (f : Cell α β k → Cell α β k)
     (l : Impl α β) (hl : Balanced l) : Tree₃ α β (l.size - 1) l.size (l.size + 1) :=
   match l with
-  | leaf => match f none with
+  | leaf => match (f .empty).inner with
             | none => ⟨.leaf, by tree_tac, by tree_tac⟩
             | some ⟨k', v'⟩ => ⟨.inner 1 k' v' .leaf .leaf, by tree_tac, by tree_tac⟩
   | inner sz ky y l r =>
-    match compare k ky with
+    match h : compare k ky with
     | .lt =>
-        let ⟨newL, h₁, h₂⟩ := updateAtKey k f l (by tree_tac)
+        let ⟨newL, h₁, h₂⟩ := updateCell k f l (by tree_tac)
         ⟨balance ky y newL r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
-    | .eq => match f (some ⟨ky, y⟩) with
+    | .eq => match (f (.ofEq ky y h)).inner with
              | none =>
                ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
              | some ⟨ky', y'⟩ => ⟨.inner sz ky' y' l r, by tree_tac, by tree_tac⟩
     | .gt =>
-        let ⟨newR, h₁, h₂⟩ := updateAtKey k f r (by tree_tac)
+        let ⟨newR, h₁, h₂⟩ := updateCell k f r (by tree_tac)
         ⟨balance ky y l newR (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
 
 /-!
@@ -60,11 +230,29 @@ def updateAtKey [Ord α] (k : α) (f : Option ((a : α) × β a) → Option ((a 
 
 /-- Model implementation of the `contains` function. -/
 def containsₘ [Ord α] (k : α) (l : Impl α β) : Bool :=
-  queryAtKey k Option.isSome l
+  applyCell k l fun c _ => c.contains
+
+/-- Model implementation of the `get?` function. -/
+def get?ₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) : Option (β k) :=
+  applyCell k l fun c _ => c.get?
+
+/-- Model implementation of the `get?ₘ` function. -/
+def getₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) (h : l.contains k = true) : β k :=
+  applyCell k l fun c hc => c.get (by simp_all)
 
 /-- Model implementation of the `insert` function. -/
 def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : Impl α β :=
-  updateAtKey k (fun _ => some ⟨k, v⟩) l h |>.impl
+  updateCell k (fun _ => .of k v) l h |>.impl
+
+def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
+  explore k none (fun sofar step =>
+    match step with
+    | .lt ky _ y _ => some ⟨ky, y⟩
+    | .eq _ c r => c.inner.or r.head? |>.or sofar
+    | .gt _ _ _ _ => sofar) l
+
+def lowerBound?ₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
+  applyPartition k l fun _ c _ r => c.inner.or r.head?
 
 /-!
 ## Helper theorems for reasoning with key-value pairs
@@ -88,7 +276,47 @@ theorem balanceRSlow_pair_congr {k : α} {v : β k} {k' : α} {v' : β k'}
 
 theorem contains_eq_containsₘ [Ord α] (k : α) (l : Impl α β) :
     l.contains k = l.containsₘ k := by
-  induction l using Impl.contains.induct k <;> simp_all [contains, containsₘ, queryAtKey]
+  simp only [containsₘ]
+  induction l
+  · simp only [contains, applyCell]
+    split <;> rename_i hcmp₁ <;> split <;> rename_i hcmp₂ <;> try (simp [hcmp₁] at hcmp₂; done)
+    all_goals simp_all
+  · simp [contains, applyCell]
+
+theorem get?_eq_get?ₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) :
+    l.get? k = l.get?ₘ k := by
+  simp only [get?ₘ]
+  induction l
+  · simp only [applyCell, get?]
+    split <;> rename_i hcmp₁ <;> split <;> rename_i hcmp₂ <;> try (simp [hcmp₁] at hcmp₂; done)
+    all_goals simp_all [Cell.get?, Cell.ofEq]
+  · simp [get?, applyCell]
+
+theorem lowerBound?_eq_lowerBound?ₘ' [Ord α] {k : α} {l : Impl α β} :
+    l.lowerBound? k = l.lowerBound?ₘ' k := by
+  rw [lowerBound?, lowerBound?ₘ']
+  suffices ∀ o, lowerBound?.go k o l = explore k o _ l from this none
+  intro o
+  induction l generalizing o
+  · rename_i sz k' v' l r ih₁ ih₂
+    rw [lowerBound?.go, explore]
+    split <;> rename_i hcmp <;> split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
+    all_goals simp_all
+  · simp [lowerBound?.go, explore]
+
+theorem lowerBound?ₘ'_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
+    l.lowerBound?ₘ' k = l.lowerBound?ₘ k := by
+  rw [lowerBound?ₘ', explore_eq_applyPartition, lowerBound?ₘ]
+  · simp only [Option.or_none]
+  · intros k hcmp v ll c rr r init
+    simp
+    cases c.inner <;> simp
+  · intros k hcmp v ll c rr l init
+    simp
+
+theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
+    l.lowerBound? k = l.lowerBound?ₘ k := by
+  rw [lowerBound?_eq_lowerBound?ₘ', lowerBound?ₘ'_eq_lowerBound?ₘ]
 
 theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
@@ -182,9 +410,12 @@ theorem insert_eq_insertSlow [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
 
 theorem insert_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
     (insert k v l h).impl = insertₘ k v l h := by
-  induction l, h using insert.induct k v <;>
-    simp_all [insert, insertₘ, updateAtKey, balanceL_eq_balance, balanceR_eq_balance,
-      balance_eq_balanceSlow]
+  simp only [insertₘ]
+  induction l
+  · simp only [insert, updateCell]
+    split <;> rename_i hcmp <;> split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
+    all_goals simp_all [balanceL_eq_balance, balanceR_eq_balance]
+  · simp [insert, insertₘ, updateCell]
 
 end Impl
 

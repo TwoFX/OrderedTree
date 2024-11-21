@@ -155,6 +155,17 @@ def getD [Ord α] (k : α) (l : Impl α (fun _ => δ)) (fallback : δ) : δ :=
 
 end Const
 
+/-- The smallest element of `l` that is not less than `k`. -/
+def lowerBound? [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
+  go none
+where
+  go (best : Option ((a : α) × β a)) : Impl α β → Option ((a : α) × β a)
+  | .leaf => best
+  | .inner _ ky y l r => match compare k ky with
+    | .lt => go (some ⟨ky, y⟩) l
+    | .eq => some ⟨ky, y⟩
+    | .gt => go best r
+
 /-- Predicate for local balance at a node of the tree. We don't provide API for this, preferring
 instead to use automation to dispatch goals about balance. -/
 @[tree_tac]

@@ -209,16 +209,16 @@ theorem toListModel_filter_lt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
   exact fun p hp => TransCmp.lt_trans hcmp (ho.compare_right hp)
 
 theorem toListModel_updateAtKey [Ord α] [TransOrd α] {k : α}
-    {f : Option ((a : α) × β a) → Option ((a : α) × β a)} {l : Impl α β} (hlb : l.Balanced)
+    {f : Cell α β k → Cell α β k} {l : Impl α β} (hlb : l.Balanced)
     (hlo : l.Ordered) :
-    (l.updateAtKey k f hlb).impl.toListModel = l.toListModel.filter (compare k ·.1 == .gt) ++
-      (f (l.toListModel.find? (compare k ·.1 == .eq))).toList ++
+    (l.updateCell k f hlb).impl.toListModel = l.toListModel.filter (compare k ·.1 == .gt) ++
+      (f (l.applyCell k (fun c _ => c))).inner.toList ++
       l.toListModel.filter (compare k ·.1 == .lt) := by
-  induction l, hlb using updateAtKey.induct k f
-  · simp_all [updateAtKey]
-  · simp_all [updateAtKey]
+  induction l, hlb using updateCell.induct k f
+  · simp_all [updateCell, applyCell]
+  · simp_all [updateCell, applyCell]
   · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hup hb' ih
-    simp only [updateAtKey, hcmp]
+    simp only [updateCell, hcmp]
     rw [toListModel_balance, toListModel_filter_gt_of_lt hcmp hlo,
       toListModel_filter_lt_of_lt hcmp hlo, toListModel_find?_of_lt hcmp hlo, ih hlo.left]
     simp
