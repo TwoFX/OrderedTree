@@ -5,6 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.Model
 import Orderedtree.Classes.TransOrd
+import Orderedtree.DOrderedTree.Internal.List.Associative
 import Std.Data.DHashMap.Internal.List.Associative
 
 /-!
@@ -16,7 +17,7 @@ set_option linter.all true
 
 universe u v w
 
-variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type v}
+variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
 namespace Std.DOrderedTree.Internal.Impl
 
@@ -373,6 +374,183 @@ theorem toListModel_updateAtKey_perm [Ord α] [TransOrd α]
   obtain ⟨l, h₁, h₂, h₃⟩ := exists_cell_of_updateAtKey l hlb hlo k f
   refine h₂.trans (List.Perm.trans ?_ (hg₁ hlo.distinctKeys h₁).symm)
   rwa [hfg, hg₂, findCell_inner]
+
+theorem contains_findCell [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) (h : l.contains k) :
+    (findCell l.toListModel k).contains := by
+  induction l
+  · rename_i sz k' v' l r ih₁ ih₂
+    cases hcmp : compare k k' <;> simp [contains, hcmp] at h
+    · simpa only [findCell_of_lt hcmp hlo] using ih₁ hlo.left h
+    · simp only [findCell_of_eq hcmp hlo, Cell.contains_ofEq]
+    · simpa only [findCell_of_gt hcmp hlo] using ih₂ hlo.right h
+  · simp [contains] at h
+
+theorem applyPartition_eq [Ord α] [TransOrd α] {k : α} {l : Impl α β}
+    {f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α ) × β a) → δ}
+    (hlo : l.Ordered) :
+    applyPartition k l f =
+    f (l.toListModel.filter (compare k ·.1 == .gt)) (findCell l.toListModel k)
+      (contains_findCell hlo) (l.toListModel.filter (compare k ·.1 == .lt)) := by
+  rw [applyPartition]
+  suffices ∀ ℓ ll rr h, ℓ.Ordered → (∀ p ∈ ll, compare k p.1 = .gt) → (∀ p ∈ rr, compare k p.1 = .lt) →
+    (l.toListModel = ll ++ ℓ.toListModel ++ rr) →
+      applyPartition.go k l f ll ℓ h rr = f (l.toListModel.filter (compare k ·.1 == .gt)) (findCell l.toListModel k) (contains_findCell hlo)
+        (l.toListModel.filter (compare k ·.1 == .lt)) by simpa using this l [] [] id hlo
+  intro ℓ ll rr h hℓo hll hrr hl
+  induction ℓ generalizing ll rr
+  · rename_i sz k' v' l' r' ih₁ ih₂
+    simp only [applyPartition.go, List.cons_append, List.append_assoc]
+    split <;> rename_i hcmp
+    · rw [ih₁ _ _ _ hℓo.left]
+      · exact hll
+      · simp only [List.mem_cons, List.mem_append, forall_eq_or_imp, hcmp, true_and]
+        rintro p (hp|hp)
+        · exact TransCmp.lt_trans hcmp (hℓo.compare_right hp)
+        · exact hrr _ hp
+      · simp [hl]
+    · congr
+      · rw [hl, List.filter_append, List.filter_append, List.filter_eq_self.2,
+        toListModel_filter_gt_of_eq hcmp hℓo, List.filter_eq_nil_iff.2, List.append_nil]
+        · exact fun p hp => by simp [hrr p hp]
+        · exact fun p hp => by simp [hll p hp]
+      · apply Cell.ext
+        rw [Cell.ofEq_inner, findCell_inner, hl, List.find?_append, List.find?_append,
+          List.find?_eq_none.2, Option.none_or, toListModel_find?_of_eq hcmp hℓo, Option.some_or]
+        exact fun p hp => by simp [hll p hp]
+      · rw [hl, List.filter_append, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append,
+          toListModel_filter_lt_of_eq hcmp hℓo, List.filter_eq_self.2]
+        · exact fun p hp => by simp [hrr p hp]
+        · exact fun p hp => by simp [hll p hp]
+    · rw [ih₂ _ _ _ hℓo.right]
+      · simp only [List.mem_append, List.mem_singleton]
+        rintro p (hp|hp|rfl)
+        · exact hll _ hp
+        · exact OrientedCmp.gt_of_lt (TransCmp.lt_trans (hℓo.compare_left hp) (OrientedCmp.lt_of_gt hcmp))
+        · exact hcmp
+      · exact hrr
+      · simp [hl]
+  · simp only [applyPartition.go]
+    congr
+    · rw [hl, toListModel_leaf, List.append_nil, List.filter_append, List.filter_eq_self.2,
+        List.filter_eq_nil_iff.2, List.append_nil]
+      · exact fun p hp => by simp [hrr p hp]
+      · exact fun p hp => by simp [hll p hp]
+    · apply Cell.ext
+      rw [Cell.empty_inner, findCell_inner, hl, toListModel_leaf, List.append_nil,
+        List.find?_eq_none.2]
+      simp only [List.mem_append, beq_iff_eq]
+      rintro p (hp|hp)
+      · simp [hll p hp]
+      · simp [hrr p hp]
+    · rw [hl, toListModel_leaf, List.append_nil, List.filter_append, List.filter_eq_nil_iff.2,
+        List.filter_eq_self.2, List.nil_append]
+      · exact fun p hp => by simp [hrr p hp]
+      · exact fun p hp => by simp [hll p hp]
+
+theorem containsKey_toListModel [Ord α] [OrientedOrd α] {k : α} {l : Impl α β} (h : l.contains k) :
+    containsKey k l.toListModel := by
+  simp [containsKey_eq_true_iff_exists_mem]
+  induction l
+  · rename_i sz k' v' l r ih₁ ih₂
+    simp only [toListModel_inner, containsKey_append, containsKey_cons, beq_eq, Bool.or_eq_true,
+      beq_iff_eq]
+    rw [contains] at h
+    split at h <;> rename_i hcmp
+    · obtain ⟨p, hp₁, hp₂⟩ := ih₁ h
+      exact ⟨p, by simp [hp₁], hp₂⟩
+    · obtain ⟨p, hp₁, hp₂⟩ := ih₂ h
+      exact ⟨p, by simp [hp₁], hp₂⟩
+    · exact ⟨⟨k', v'⟩, by simp, OrientedCmp.eq_symm hcmp⟩
+  · simp [contains] at h
+
+theorem Cell.containsKey_inner_toList [Ord α] [OrientedOrd α] {k : α} {c : Cell α β k} :
+    c.contains → containsKey k c.inner.toList := by
+  obtain ⟨(_|p), hp⟩ := c
+  · simp [Cell.contains]
+  · simp only [contains, Option.isSome_some, Option.toList_some, forall_const]
+    exact containsKey_cons_of_beq (by simpa using (OrientedCmp.eq_symm (hp p rfl)))
+
+theorem applyPartition_eq_apply_toListModel [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered)
+    {f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α) × β a) → δ}
+    (g : (ll : List ((a : α) × β a)) → (l.contains k → containsKey k ll) → δ)
+    (h : ∀ {ll rr : List ((a : α) × β a)} {c : Cell α β k} {h₁},
+      (ll ++ c.inner.toList ++ rr).Pairwise (fun a b => compare a.1 b.1 = .lt) → (∀ p ∈ ll, compare k p.1 = .gt) →
+      (∀ p ∈ rr, compare k p.1 = .lt) → f ll c h₁ rr = g (ll ++ c.inner.toList ++ rr)
+      (fun p => by simp [Cell.containsKey_inner_toList (h₁ p)])) :
+    applyPartition k l f = g l.toListModel containsKey_toListModel := by
+  rw [applyPartition_eq hlo, h]
+  · congr; exact (toListModel_eq_append _ hlo).symm
+  · rw [findCell_inner, ← toListModel_eq_append _ hlo]
+    exact hlo
+  · simp
+  · simp
+
+theorem applyCell_eq_apply_toListModel [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered)
+    {f : (c : Cell α β k) → (l.contains k → c.contains) → δ}
+    (g : (ll : List ((a : α) × β a)) → (l.contains k → containsKey k ll) → δ)
+    (hfg : ∀ c hc, f c hc = g c.inner.toList (Cell.containsKey_inner_toList ∘ hc))
+    (hg₁ : ∀ l₁ l₂ h, DistinctKeys l₁ → (hP : List.Perm l₁ l₂) → g l₁ h = g l₂ (containsKey_of_perm hP ▸ h))
+    (hg : ∀ l₁ l₂ h, (h' : containsKey k l₂ = false) → g (l₁ ++ l₂) h = g l₁ (by simpa [h'] using h))
+    : applyCell k l f = g l.toListModel containsKey_toListModel := by
+  rw [applyCell_eq_applyPartition, applyPartition_eq_apply_toListModel hlo]
+  intro ll rr c h₁ hd hll hrr
+  have hperm : List.Perm (ll ++ c.inner.toList ++ rr) (c.inner.toList ++ (ll ++ rr)) := by
+    simp only [List.append_assoc]; exact List.perm_append_comm_assoc ll c.inner.toList rr
+  rw [hfg, hg₁ _ _ _ _ hperm, hg]
+  · simp only [containsKey_append, Bool.or_eq_false_iff, containsKey_eq_false_iff_forall_mem_keys,
+      keys_eq_map, List.mem_map, beq_eq, beq_eq_false_iff_ne, ne_eq, forall_exists_index, and_imp,
+      forall_apply_eq_imp_iff₂]
+    exact ⟨fun p hp => by simp [hll p hp], fun p hp => by simp [hrr p hp]⟩
+  · refine ⟨?_⟩
+    rw [keys_eq_map, List.pairwise_map]
+    exact hd.imp (fun hp => by simp_all)
+
+/-!
+## Verification of access operations
+-/
+
+@[simp]
+theorem Option.head?_toList {o : Option α} : o.toList.head? = o := by
+  cases o <;> simp
+
+/-!
+### `lowerBound`
+-/
+
+theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.lowerBound?ₘ k = Std.DHashMap.Internal.List.lowerBound? k l.toListModel := by
+  rw [lowerBound?ₘ,
+    applyPartition_eq_apply_toListModel hlo (fun l _ => Std.DHashMap.Internal.List.lowerBound? k l)]
+  intro ll rr c hc hp hll hrr
+  rw [List.append_assoc, lowerBound?_append_of_forall_mem_left hll,
+    lowerBound?_eq_head? _ (hp.sublist (by simp)), List.head?_append, Option.head?_toList]
+  simp only [List.mem_append, Option.mem_toList, Option.mem_def]
+  rintro p (hp|hp)
+  · exact Ordering.isLE_of_eq_eq (c.property _ hp)
+  · exact Ordering.isLE_of_eq_lt (hrr _ hp)
+
+theorem apply_lowerBound? [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.lowerBound? k = Std.DHashMap.Internal.List.lowerBound? k l.toListModel := by
+  rw [lowerBound?_eq_lowerBound?ₘ, apply_lowerBound?ₘ hlo]
+
+/-!
+### `contains`
+-/
+
+theorem apply_containsₘ [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.containsₘ k = containsKey k l.toListModel := by
+  rw [containsₘ, applyCell_eq_apply_toListModel hlo (fun l _ => containsKey k l)]
+  · rintro ⟨(_|p), hp⟩ -
+    · simp [Cell.contains]
+    · simp only [Cell.contains, Option.isSome_some, Option.toList_some, Bool.true_eq]
+      rw [containsKey_cons_of_beq]
+      simp [OrientedCmp.eq_symm (hp p rfl)]
+  · exact fun l₁ l₂ h a hP => containsKey_of_perm hP
+  · exact fun l₁ l₂ h h' => containsKey_append_of_not_contains_right h'
+
+theorem apply_contains [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.contains k = containsKey k l.toListModel := by
+  rw [contains_eq_containsₘ, apply_containsₘ hlo]
 
 /-!
 ## Verification of modification operations

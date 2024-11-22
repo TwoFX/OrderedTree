@@ -56,7 +56,7 @@ def contains [Ord α] {k : α} (c : Cell α β k) : Bool :=
   c.inner.isSome
 
 @[simp] theorem contains_of [Ord α] {k : α} {v : β k} : (Cell.of k v).contains = true := rfl
-@[simp] theorem contains_ofRq [Ord α] {k k' : α} {v' : β k'} {h} :
+@[simp] theorem contains_ofEq [Ord α] {k k' : α} {v' : β k'} {h} :
     (Cell.ofEq k' v' h : Cell α β k).contains = true := rfl
 @[simp] theorem contains_empty [Ord α] {k : α} : (Cell.empty : Cell α β k).contains = false := rfl
 
@@ -79,7 +79,7 @@ end Cell
 
 /-- General tree-traversal function. -/
 def applyPartition [Ord α] (k : α) (l : Impl α β)
-    (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α) × β a) → δ): δ :=
+    (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α) × β a) → δ) : δ :=
   go [] l id []
 where
   go (ll : List ((a : α) × β a)) (m : Impl α β) (hm : l.contains k → m.contains k) (rr : List ((a : α) × β a)) : δ :=
