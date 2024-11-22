@@ -208,33 +208,64 @@ theorem toListModel_filter_lt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
     List.append_cancel_left_eq, List.cons.injEq, List.filter_eq_self, beq_iff_eq, true_and]
   exact fun p hp => TransCmp.lt_trans hcmp (ho.compare_right hp)
 
-theorem toListModel_updateAtKey [Ord α] [TransOrd α] {k : α}
+def findCell [Ord α] (l : List ((a : α) × β a)) (k : α) : Cell α β k where
+  inner := l.find? (compare k ·.1 == .eq)
+  property p hp := by simpa using (List.find?_eq_some_iff_append.1 hp).1
+
+theorem Cell.ext [Ord α] {k : α} {c c' : Cell α β k} : c.inner = c'.inner → c = c' := by
+  cases c; cases c'; simp
+
+theorem findCell_inner [Ord α] (l : List ((a : α) × β a)) (k : α) :
+    (findCell l k).inner = l.find? (compare k ·.1 == .eq) := rfl
+
+@[simp] theorem findCell_nil [Ord α] (k : α) : (findCell [] k : Cell α β k) = .empty := rfl
+
+theorem findCell_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    findCell (inner sz k' v' l r).toListModel k = findCell r.toListModel k :=
+  Cell.ext (toListModel_find?_of_gt hcmp ho)
+
+theorem findCell_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    findCell (inner sz k' v' l r).toListModel k = Cell.ofEq k' v' hcmp :=
+  Cell.ext (toListModel_find?_of_eq hcmp ho)
+
+theorem findCell_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
+    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    findCell (inner sz k' v' l r).toListModel k = findCell l.toListModel k :=
+  Cell.ext (toListModel_find?_of_lt hcmp ho)
+
+theorem toListModel_updateCell [Ord α] [TransOrd α] {k : α}
     {f : Cell α β k → Cell α β k} {l : Impl α β} (hlb : l.Balanced)
     (hlo : l.Ordered) :
     (l.updateCell k f hlb).impl.toListModel = l.toListModel.filter (compare k ·.1 == .gt) ++
-      (f (l.applyCell k (fun c _ => c))).inner.toList ++
+      (f (findCell l.toListModel k)).inner.toList ++
       l.toListModel.filter (compare k ·.1 == .lt) := by
   induction l, hlb using updateCell.induct k f
-  · simp_all [updateCell, applyCell]
-  · simp_all [updateCell, applyCell]
+  · simp_all [updateCell]
+  · simp_all [updateCell]
   · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hup hb' ih
     simp only [updateCell, hcmp]
+    split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
     rw [toListModel_balance, toListModel_filter_gt_of_lt hcmp hlo,
-      toListModel_filter_lt_of_lt hcmp hlo, toListModel_find?_of_lt hcmp hlo, ih hlo.left]
+      toListModel_filter_lt_of_lt hcmp hlo, findCell_of_lt hcmp hlo, ih hlo.left]
     simp
   · rename_i sz k' v' l r hl hcmp hf hl'
-    simp only [updateAtKey, hcmp, hf]
-    rw [toListModel_glue, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp hlo,
+    simp only [updateCell, hcmp, hf]
+    split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
+    rw [toListModel_glue, toListModel_filter_gt_of_eq hcmp hlo, findCell_of_eq hcmp hlo,
       hf, toListModel_filter_lt_of_eq hcmp hlo]
     simp
   · rename_i sz k' v' l r hl hcmp k'' v'' hf hl'
-    simp only [updateAtKey, hcmp, hf]
-    rw [toListModel_inner, toListModel_filter_gt_of_eq hcmp hlo, toListModel_find?_of_eq hcmp hlo,
+    simp only [updateCell, hcmp, hf]
+    split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
+    rw [toListModel_inner, toListModel_filter_gt_of_eq hcmp hlo, findCell_of_eq hcmp hlo,
       toListModel_filter_lt_of_eq hcmp hlo, hf]
     simp
   · rename_i sz k' v' l r hb hcmp l' hl'1 hl'2 hup hb' ih
-    simp only [updateAtKey, hcmp]
-    rw [toListModel_filter_gt_of_gt hcmp hlo, toListModel_find?_of_gt hcmp hlo,
+    simp only [updateCell, hcmp]
+    split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
+    rw [toListModel_filter_gt_of_gt hcmp hlo, findCell_of_gt hcmp hlo,
       toListModel_filter_lt_of_gt hcmp hlo, toListModel_balance, ih hlo.right]
     simp
 
@@ -262,11 +293,9 @@ theorem Option.pairwise_toList {P : α → α → Prop} {o : Option α} : o.toLi
   cases o <;> simp
 
 theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
-    {f : Option ((a : α) × β a) → Option ((a : α) × β a)}
-    (hf : ∀ p : Option ((a : α) × β a), (∀ p', p = some p' → compare k p'.1 = .eq) →
-      ∀ q : (a : α) × β a, f p = q → compare k q.1 = .eq)
-    {l : Impl α β} (hlb : l.Balanced) (hlo : l.Ordered) : (l.updateAtKey k f hlb).impl.Ordered := by
-  rw [Ordered, toListModel_updateAtKey _ hlo]
+    {f : Cell α β k → Cell α β k}
+    {l : Impl α β} (hlb : l.Balanced) (hlo : l.Ordered) : (l.updateCell k f hlb).impl.Ordered := by
+  rw [Ordered, toListModel_updateCell _ hlo]
   rw [Ordered, toListModel_eq_append k hlo] at hlo
   simp only [List.pairwise_append] at hlo ⊢
   refine ⟨⟨hlo.1.1, Option.pairwise_toList, ?_⟩, ⟨hlo.2.1, ?_⟩⟩
@@ -274,19 +303,14 @@ theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
     have := hlo.2.2 a (List.mem_append_left _ ha)
     clear hlo
     simp at ha hb
-    have : compare k b.fst = .eq := by
-      refine hf _ (fun p hp => ?_) _ hb
-      exact beq_iff_eq.1 (List.find?_eq_some_iff_append.1 hp |>.1)
+    have : compare k b.fst = .eq := (f (findCell l.toListModel k)).property _ hb
     exact TransCmp.lt_of_lt_of_eq (OrientedCmp.lt_of_gt ha.2) this
   · intro a ha b hb
     rw [List.mem_append] at ha
     obtain ha|ha := ha
     · exact hlo.2.2 a (List.mem_append_left _ ha) _ hb
     · simp at ha
-      have h₀ : compare k a.fst = .eq := by
-        apply hf _ _ _ ha
-        intro p hp
-        exact beq_iff_eq.1 (List.find?_eq_some_iff_append.1 hp |>.1)
+      have h₀ : compare k a.fst = .eq := (f (findCell l.toListModel k)).property _ ha
       have h₁ : compare k b.fst = .lt := by
         simp only [List.mem_filter, beq_iff_eq] at hb
         exact hb.2
@@ -317,16 +341,16 @@ open Std.DHashMap.Internal.List
 
 theorem exists_cell_of_updateAtKey [Ord α] [TransOrd α] (l : Impl α β) (hlb : l.Balanced)
     (hlo : l.Ordered) (k : α)
-    (f : Option ((a : α) × β a) → Option ((a : α) × β a)) : ∃ (l' : List ((a : α) × β a)),
+    (f : Cell α β k → Cell α β k) : ∃ (l' : List ((a : α) × β a)),
     l.toListModel.Perm ((l.toListModel.find? (compare k ·.1 == .eq)).toList ++ l') ∧
-    (l.updateAtKey k f hlb).impl.toListModel.Perm
-      ((f (l.toListModel.find? (compare k ·.1 == .eq))).toList ++ l') ∧
+    (l.updateCell k f hlb).impl.toListModel.Perm
+      ((f (findCell l.toListModel k)).inner.toList ++ l') ∧
     (containsKey k l' = false) := by
   refine ⟨l.toListModel.filter (compare k ·.1 == .gt) ++
     l.toListModel.filter (compare k ·.1 == .lt), ?_, ?_, ?_⟩
   · conv => lhs; rw [toListModel_eq_append k hlo]
     simpa using List.perm_append_comm_assoc _ _ _
-  · conv => lhs; rw [toListModel_updateAtKey hlb hlo]
+  · conv => lhs; rw [toListModel_updateCell hlb hlo]
     simpa using List.perm_append_comm_assoc _ _ _
   · rw [containsKey_eq_false_iff_forall_mem_keys, keys_eq_map]
     simp only [List.map_append, List.mem_append, List.mem_map, List.mem_filter, beq_iff_eq, beq_eq,
@@ -340,18 +364,15 @@ theorem Ordered.distinctKeys [Ord α] {l : Impl α β} (h : l.Ordered) :
 /-- This is the general theorem to show that modification operations are correct. -/
 theorem toListModel_updateAtKey_perm [Ord α] [TransOrd α]
     {l : Impl α β} (hlb : l.Balanced) (hlo : l.Ordered) {k : α}
-    {f : Option ((a : α) × β a) → Option ((a : α) × β a)}
+    {f : Cell α β k → Cell α β k}
     {g : List ((a : α) × β a) → List ((a : α) × β a)}
-    (hfg : ∀ {l}, (∀ (p : (a : α) × β a), l = some p → p.1 == k) → (f l).toList = g l.toList)
+    (hfg : ∀ {c}, (f c).inner.toList = g c.inner.toList)
     (hg₁ : ∀ {l l'}, DistinctKeys l → List.Perm l l' → List.Perm (g l) (g l'))
     (hg₂ : ∀ {l l'}, containsKey k l' = false → g (l ++ l') = g l ++ l') :
-    List.Perm (l.updateAtKey k f hlb).impl.toListModel (g l.toListModel) := by
+    List.Perm (l.updateCell k f hlb).impl.toListModel (g l.toListModel) := by
   obtain ⟨l, h₁, h₂, h₃⟩ := exists_cell_of_updateAtKey l hlb hlo k f
   refine h₂.trans (List.Perm.trans ?_ (hg₁ hlo.distinctKeys h₁).symm)
-  rwa [hfg, hg₂]
-  simp only [Option.mem_def, beq_eq, beq_iff_eq]
-  intro p hp
-  simpa using OrientedCmp.eq_symm (by simpa using (List.find?_eq_some_iff_append.1 hp).1)
+  rwa [hfg, hg₂, findCell_inner]
 
 /-!
 ## Verification of modification operations
@@ -374,17 +395,17 @@ theorem ordered_empty [Ord α] : (.empty : Impl α β).Ordered := by
 
 theorem ordered_insertₘ [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
     (hlo : l.Ordered) : (l.insertₘ k v hlb).Ordered :=
-  ordered_updateAtKey (by simp) _ hlo
+  ordered_updateAtKey _ hlo
 
 theorem toListModel_insertₘ [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β} (hlb : l.Balanced)
     (hlo : l.Ordered) : (l.insertₘ k v hlb).toListModel.Perm (insertEntry k v l.toListModel) := by
   refine toListModel_updateAtKey_perm _ hlo ?_ insertEntry_of_perm
     insertEntry_append_of_not_contains_right
-  rintro (_|l) hl
+  rintro ⟨(_|l), hl⟩
   · simp
-  · simp only [Option.toList_some]
-    rw [insertEntry_of_containsKey (containsKey_cons_of_beq (hl l rfl)),
-      replaceEntry_cons_of_true (hl l rfl)]
+  · simp only [Option.toList_some, Cell.of_inner]
+    have h : l.fst == k := by simpa using OrientedCmp.eq_symm (hl l rfl)
+    rw [insertEntry_of_containsKey (containsKey_cons_of_beq h), replaceEntry_cons_of_true h]
 
 /-!
 ### `insert`

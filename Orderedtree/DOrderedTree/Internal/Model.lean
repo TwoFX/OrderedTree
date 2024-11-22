@@ -75,9 +75,6 @@ def get [Ord α] [OrientedOrd α] [LawfulEqOrd α] {k : α} (c : Cell α β k) (
   | none => False.elim (by simp [contains, hc] at h)
   | some p => (cast (congrArg β (eq_of_compare (c.property _ hc)).symm) p.2)
 
-def toList [Ord α] {k : α} (c : Cell α β k) : List ((a : α) × β a) :=
-  c.inner.toList
-
 end Cell
 
 /-- General tree-traversal function. -/
