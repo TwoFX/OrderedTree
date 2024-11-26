@@ -28,7 +28,7 @@ namespace DOrderedTree
 def empty : DOrderedTree α β cmp :=
   letI : Ord α := ⟨cmp⟩; ⟨Internal.Impl.empty, .empty⟩
 
-/-- Inserts the mapping `(a, b)` into the binary search tree, -/
+/-- Inserts the mapping `(a, b)` into the binary search tree. -/
 @[inline]
 def insert (l : DOrderedTree α β cmp) (a : α) (b : β a) : DOrderedTree α β cmp :=
   letI : Ord α := ⟨cmp⟩; ⟨(l.inner.insert a b l.wf.balanced).impl, .insert l.wf⟩

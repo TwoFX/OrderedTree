@@ -588,6 +588,20 @@ theorem toListModel_insert [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl 
   exact toListModel_insertₘ hlb hlo
 
 /-!
+### `insertSlow`
+-/
+
+theorem WF.insertSlow [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β}
+    (h : l.WF) : (l.insertSlow k v).WF := by
+  simpa [insert_eq_insertSlow] using WF.insert (h := h.balanced) h
+
+theorem toListModel_insertSlow [Ord α] [TransOrd α] {k : α} {v : β k} {l : Impl α β}
+    (hlb : l.Balanced) (hlo : l.Ordered) :
+    (l.insertSlow k v).toListModel.Perm (insertEntry k v l.toListModel) := by
+  rw [insertSlow_eq_insertₘ]
+  exact toListModel_insertₘ hlb hlo
+
+/-!
 ## Deducing that well-formed trees are ordered
 -/
 

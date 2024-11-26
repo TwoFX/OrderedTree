@@ -362,6 +362,10 @@ theorem insert_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} {h} :
     all_goals simp_all [balanceL_eq_balance, balanceR_eq_balance]
   · simp [insert, insertₘ, updateCell]
 
+theorem insertSlow_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} (h : l.Balanced) :
+    insertSlow k v l = insertₘ k v l h := by
+  rw [← insert_eq_insertSlow (h := h), insert_eq_insertₘ]
+
 end Impl
 
 end Std.DOrderedTree.Internal
