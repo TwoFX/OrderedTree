@@ -369,3 +369,22 @@ theorem insertSlow_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} (h
 end Impl
 
 end Std.DOrderedTree.Internal
+
+open Lean
+
+run_meta do
+  let env ← getEnv
+  let mut arr : Array (Nat × Name) := #[]
+  let mut unknown : Array Name := #[]
+  let mut totalSize : Nat := 0
+  for (name, info) in env.constants do
+    if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
+      if let some e := info.value? then
+        let numObjs ← e.numObjs
+        arr := arr.push (numObjs, name)
+        totalSize := totalSize + numObjs
+      else
+        unknown := unknown.push name
+  arr := arr.qsort (fun a b => a.1 > b.1)
+  println! "total size: {totalSize}"
+  println! "{arr}"
