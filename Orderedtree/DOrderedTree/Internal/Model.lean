@@ -151,23 +151,26 @@ theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
 
 /-- General "update the mapping for a given key" function. -/
 def updateCell [Ord α] (k : α) (f : Cell α β k → Cell α β k)
-    (l : Impl α β) (hl : Balanced l) : Tree₃ α β (l.size - 1) l.size (l.size + 1) :=
+    (l : Impl α β) (hl : Balanced l) : TreeB α β (l.size - 1) (l.size + 1) :=
   match l with
   | leaf => match (f .empty).inner with
-            | none => ⟨.leaf, by tree_tac, by tree_tac⟩
-            | some ⟨k', v'⟩ => ⟨.inner 1 k' v' .leaf .leaf, by tree_tac, by tree_tac⟩
+            | none => ⟨.leaf, by tree_tac, by tree_tac, by tree_tac⟩
+            | some ⟨k', v'⟩ => ⟨.inner 1 k' v' .leaf .leaf, by tree_tac, by tree_tac, by tree_tac⟩
   | inner sz ky y l r =>
     match h : compare k ky with
     | .lt =>
-        let ⟨newL, h₁, h₂⟩ := updateCell k f l (by tree_tac)
-        ⟨balance ky y newL r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+        let ⟨newL, h₁, h₂, h₃⟩ := updateCell k f l (by tree_tac)
+        ⟨balance ky y newL r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac,
+          by tree_tac⟩
     | .eq => match (f (.ofEq ky y h)).inner with
              | none =>
-               ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
-             | some ⟨ky', y'⟩ => ⟨.inner sz ky' y' l r, by tree_tac, by tree_tac⟩
+               ⟨glue l r (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac,
+                  by tree_tac⟩
+             | some ⟨ky', y'⟩ => ⟨.inner sz ky' y' l r, by tree_tac, by tree_tac, by tree_tac⟩
     | .gt =>
-        let ⟨newR, h₁, h₂⟩ := updateCell k f r (by tree_tac)
-        ⟨balance ky y l newR (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac⟩
+        let ⟨newR, h₁, h₂, h₃⟩ := updateCell k f r (by tree_tac)
+        ⟨balance ky y l newR (by tree_tac) (by tree_tac) (by tree_tac), by tree_tac, by tree_tac,
+          by tree_tac⟩
 
 /-!
 ## Model functions
@@ -264,47 +267,32 @@ theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
   rw [lowerBound?_eq_lowerBound?ₘ', lowerBound?ₘ'_eq_lowerBound?ₘ]
 
 theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
-  rw [balanceL_eq_balanceLErase, balanceLErase_eq_balance]
+    balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (Or.inl hlr.erase) := by
+  rw [balanceL_eq_balanceLErase, balanceLErase_eq_balanceLSlow,
+    balanceLSlow_eq_balanceSlow hlb hrb hlr.erase, balance_eq_balanceSlow]
 
 theorem balanceR_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceR k v l r hlb hrb hlr = balance k v l r hlb hrb (by tree_tac) := by
-  rw [balanceR_eq_balanceRErase, balanceRErase_eq_balance]
+    balanceR k v l r hlb hrb hlr = balance k v l r hlb hrb (Or.inr hlr.erase) := by
+  rw [balanceR_eq_balanceRErase, balanceRErase_eq_balanceRSlow,
+    balanceRSlow_eq_balanceSlow hlb hrb hlr.erase, balance_eq_balanceSlow]
+
+theorem balanceLErase_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceLErase k v l r hlb hrb hlr = balance k v l r hlb hrb (Or.inl hlr) := by
+  rw [balanceLErase_eq_balanceLSlow,
+    balanceLSlow_eq_balanceSlow hlb hrb hlr, balance_eq_balanceSlow]
+
+theorem balanceRErase_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceRErase k v l r hlb hrb hlr = balance k v l r hlb hrb (Or.inr hlr) := by
+  rw [balanceRErase_eq_balanceRSlow,
+    balanceRSlow_eq_balanceSlow hlb hrb hlr, balance_eq_balanceSlow]
 
 theorem balanceL_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balanceLSlow k v l r := by
-  rw [balanceL.eq_def, balanceLSlow.eq_def]
-  repeat' (split; dsimp)
-  all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
-
-theorem balanceLErase_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceLErase k v l r hlb hrb hlr = balanceLSlow k v l r := by
-  rw [balanceLErase.eq_def, balanceLSlow.eq_def]
-  repeat' (split; dsimp)
-  all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
+  rw [balanceL_eq_balanceLErase, balanceLErase_eq_balanceLSlow]
 
 theorem balanceR_eq_balanceRSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceR k v l r hlb hrb hlr = balanceRSlow k v l r := by
-  rw [balanceR.eq_def, balanceRSlow.eq_def]
-  repeat' (split; dsimp)
-  all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
-
-theorem balanceRErase_eq_balanceRSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
-    balanceRErase k v l r hlb hrb hlr = balanceRSlow k v l r := by
-  rw [balanceRErase.eq_def, balanceRSlow.eq_def]
-  repeat' (split; dsimp)
-  all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
-
-theorem balance_eq_balanceSlow (k : α) (v : β k) (l r : Impl α β) (hlb hrb hlr) :
-    balance k v l r hlb hrb hlr = balanceSlow k v l r := by
-  rw [balance.eq_def, balanceSlow.eq_def]
-  repeat' (split; dsimp)
-  all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
+  rw [balanceR_eq_balanceRErase, balanceRErase_eq_balanceRSlow]
 
 theorem minView_k_eq_minViewSlow {k : α} {v : β k} {l r : Impl α β} {hl hr hlr} :
     (minView k v l r hl hr hlr).k = (minViewSlow k v l r).k := by
@@ -369,22 +357,3 @@ theorem insertSlow_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} (h
 end Impl
 
 end Std.DOrderedTree.Internal
-
-open Lean
-
-run_meta do
-  let env ← getEnv
-  let mut arr : Array (Nat × Name) := #[]
-  let mut unknown : Array Name := #[]
-  let mut totalSize : Nat := 0
-  for (name, info) in env.constants do
-    if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
-      if let some e := info.value? then
-        let numObjs ← e.numObjs
-        arr := arr.push (numObjs, name)
-        totalSize := totalSize + numObjs
-      else
-        unknown := unknown.push name
-  arr := arr.qsort (fun a b => a.1 > b.1)
-  println! "total size: {totalSize}"
-  println! "{arr}"

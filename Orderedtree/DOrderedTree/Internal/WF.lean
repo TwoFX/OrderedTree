@@ -233,7 +233,7 @@ theorem toListModel_updateCell [Ord α] [TransOrd α] {k : α}
   induction l, hlb using updateCell.induct k f
   · simp_all [updateCell]
   · simp_all [updateCell]
-  · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hup hb' ih
+  · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hl'₃ hup hb' ih
     simp only [updateCell, hcmp]
     split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
     rw [toListModel_balance, toListModel_filter_gt_of_lt hcmp hlo,
@@ -251,7 +251,7 @@ theorem toListModel_updateCell [Ord α] [TransOrd α] {k : α}
     rw [toListModel_inner, toListModel_filter_gt_of_eq hcmp hlo, findCell_of_eq hcmp hlo,
       toListModel_filter_lt_of_eq hcmp hlo, hf]
     simp
-  · rename_i sz k' v' l r hb hcmp l' hl'1 hl'2 hup hb' ih
+  · rename_i sz k' v' l r hb hcmp l' hl'₁ hl'₂ hl'₃ hup hb' ih
     simp only [updateCell, hcmp]
     split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
     rw [toListModel_filter_gt_of_gt hcmp hlo, findCell_of_gt hcmp hlo,

@@ -47,23 +47,23 @@ def leanInsertIfNew (k : Nat) (v : Nat) (l : Lean.RBMap Nat Nat Ord.compare) (_h
 
 @[inline]
 def insertIfNew₁ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Tree₂ α β l.size (l.size + 1) :=
-  if l.contains k then ⟨l, hl, Or.inl rfl⟩ else l.insert k v hl
+    TreeB α β l.size (l.size + 1) :=
+  if l.contains k then ⟨l, hl, by omega, by omega⟩ else l.insert k v hl
 
 
 def insertIfNew₂ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Tree₂ α β l.size (l.size + 1) :=
+    TreeB α β l.size (l.size + 1) :=
   match l with
-  | leaf => ⟨.inner 1 k v .leaf .leaf, sorry, sorry⟩
+  | leaf => ⟨.inner 1 k v .leaf .leaf, sorry, sorry, sorry⟩
   | l@(inner sz k' v' l' r') =>
       match compare k k' with
       | .lt =>
-          let ⟨d, hd, hd'⟩ := insertIfNew₂ k v l' sorry
-          ⟨balanceL k' v' d r' sorry sorry sorry, sorry, sorry⟩
+          let ⟨d, hd, hd'₁, hd'₂⟩ := insertIfNew₂ k v l' sorry
+          ⟨balanceL k' v' d r' sorry sorry sorry, sorry, sorry, sorry⟩
       | .gt =>
-          let ⟨d, hd, hd'⟩ := insertIfNew₂ k v r' sorry
-          ⟨balanceR k' v' l' d sorry sorry sorry, sorry, sorry⟩
-      | .eq => ⟨inner sz k' v' l' r', sorry, sorry⟩
+          let ⟨d, hd, hd'₁, hd'₂⟩ := insertIfNew₂ k v r' sorry
+          ⟨balanceR k' v' l' d sorry sorry sorry, sorry, sorry, sorry⟩
+      | .eq => ⟨inner sz k' v' l' r', sorry, sorry, sorry⟩
 
 bench(Impl Nat (fun _ => Nat), Impl.empty, insertIfNew₁, bench₁, "First")
 bench(Impl Nat (fun _ => Nat), Impl.empty, insertIfNew₂, bench₂, "Second")

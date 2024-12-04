@@ -39,12 +39,12 @@ def leanContainsThenInsert (k : Nat) (v : Nat) (l : Lean.RBMap Nat Nat Ord.compa
 
 @[inline]
 def containsThenInsert₁ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × Tree₂ α β l.size (l.size + 1) :=
+    Bool × TreeB α β l.size (l.size + 1) :=
   (l.contains k, l.insert k v hl)
 
 @[inline]
 def containsThenInsert₂ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × Tree₂ α β l.size (l.size + 1) :=
+    Bool × TreeB α β l.size (l.size + 1) :=
   let sz := size l
   let m := l.insert k v hl
   (sz == m.1.size, m)
@@ -54,18 +54,18 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
   | inner sz _ _ _ _ => sz
 
 def containsThenInsert₃ [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × Tree₂ α β l.size (l.size + 1) :=
+    Bool × TreeB α β l.size (l.size + 1) :=
   match l with
-  | leaf => ⟨false, .inner 1 k v .leaf .leaf, sorry, sorry⟩
+  | leaf => ⟨false, .inner 1 k v .leaf .leaf, sorry, sorry, sorry⟩
   | inner sz k' v' l r =>
       match compare k k' with
       | .lt =>
-          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v l sorry
-          ⟨c, balanceL k' v' d r sorry sorry sorry, sorry, sorry⟩
+          let ⟨c, ⟨d, hd, hd', hd''⟩⟩ := containsThenInsert₃ k v l sorry
+          ⟨c, balanceL k' v' d r sorry sorry sorry, sorry, sorry, sorry⟩
       | .gt =>
-          let ⟨c, ⟨d, hd, hd'⟩⟩ := containsThenInsert₃ k v r sorry
-          ⟨c, balanceR k' v' l d sorry sorry sorry, sorry, sorry⟩
-      | .eq => ⟨true, .inner sz k v l r, sorry, sorry⟩
+          let ⟨c, ⟨d, hd, hd', hd''⟩⟩ := containsThenInsert₃ k v r sorry
+          ⟨c, balanceR k' v' l d sorry sorry sorry, sorry, sorry, sorry⟩
+      | .eq => ⟨true, .inner sz k v l r, sorry, sorry, sorry⟩
 
 bench(Impl Nat (fun _ => Nat), Impl.empty, containsThenInsert₁, bench₁, "First")
 bench(Impl Nat (fun _ => Nat), Impl.empty, containsThenInsert₂, bench₂, "Second")
