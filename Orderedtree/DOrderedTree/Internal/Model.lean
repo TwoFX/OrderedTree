@@ -34,45 +34,49 @@ def contains' [Ord α] (k : α → Ordering) (l : Impl α β) : Bool :=
     | .gt => contains' k r
     | .eq => true
 
+theorem contains'_compare [Ord α] {k : α} {l : Impl α β} :
+    l.contains' (compare k) = l.contains k := by
+  induction l <;> simp_all [contains, contains'] <;> rfl
+
 /-- General tree-traversal function. -/
-def applyPartition [Ord α] (k : α) (l : Impl α β)
-    (f : List ((a : α) × β a) → (c : Cell α β (compare k)) → (l.contains k → c.contains) → List ((a : α) × β a) → δ) : δ :=
+def applyPartition [Ord α] (k : α → Ordering) (l : Impl α β)
+    (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains' k → c.contains) → List ((a : α) × β a) → δ) : δ :=
   go [] l id []
 where
-  go (ll : List ((a : α) × β a)) (m : Impl α β) (hm : l.contains k → m.contains k) (rr : List ((a : α) × β a)) : δ :=
+  go (ll : List ((a : α) × β a)) (m : Impl α β) (hm : l.contains' k → m.contains' k) (rr : List ((a : α) × β a)) : δ :=
   match m with
-  | .leaf => f ll .empty (by simp [contains] at hm; simp [hm]) rr
+  | .leaf => f ll .empty (by simp [contains'] at hm; simp [hm]) rr
   | .inner _ k' v' l r =>
-    match h : compare k k' with
-    | .lt => go ll l (fun hc => have := hm hc; by rw [← this, contains]; simp_all) (⟨k', v'⟩ :: r.toListModel ++ rr)
+    match h : k k' with
+    | .lt => go ll l (fun hc => have := hm hc; by rw [← this, contains']; simp_all) (⟨k', v'⟩ :: r.toListModel ++ rr)
     | .eq => f (ll ++ l.toListModel) (.ofEq k' v' h) (by simp) (r.toListModel ++ rr)
-    | .gt => go (ll ++ l.toListModel ++ [⟨k', v'⟩]) r (fun hc => have := hm hc; by rw [← this, contains]; simp_all) rr
+    | .gt => go (ll ++ l.toListModel ++ [⟨k', v'⟩]) r (fun hc => have := hm hc; by rw [← this, contains']; simp_all) rr
 
 def applyCell [Ord α] (k : α) (l : Impl α β)
-    (f : (c : Cell α β (compare k)) → (l.contains k → c.contains) → δ) : δ :=
+    (f : (c : Cell α β (compare k)) → (l.contains' (compare k) → c.contains) → δ) : δ :=
   match l with
-  | .leaf => f .empty (by simp [contains])
+  | .leaf => f .empty (by simp [contains'])
   | .inner _ k' v' l r =>
     match hcmp : compare k k' with
-    | .lt => applyCell k l (fun c h => f c fun h' => h (by simpa [contains, hcmp] using h'))
+    | .lt => applyCell k l (fun c h => f c fun h' => h (by simpa [contains', hcmp] using h'))
     | .eq => f (.ofEq k' v' hcmp) (by simp)
-    | .gt => applyCell k r (fun c h => f c fun h' => h (by simpa [contains, hcmp] using h'))
+    | .gt => applyCell k r (fun c h => f c fun h' => h (by simpa [contains', hcmp] using h'))
 
 theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
-    (f : (c : Cell α β (compare k)) → (l.contains k → c.contains) → δ) :
-    applyCell k l f = applyPartition k l (fun _ c hc _ => f c hc) := by
+    (f : (c : Cell α β (compare k)) → (l.contains' (compare k) → c.contains) → δ) :
+    applyCell k l f = applyPartition (compare k) l (fun _ c hc _ => f c hc) := by
   rw [applyPartition]
-  suffices ∀ L u v, (hL : l.contains k ↔ L.contains k) →
-      applyCell k l f = applyPartition.go k L (fun _ c hc _ => f c (hc ∘ hL.1)) u l hL.2 v from
+  suffices ∀ L u v, (hL : l.contains' (compare k) ↔ L.contains' (compare k)) →
+      applyCell k l f = applyPartition.go (compare k) L (fun _ c hc _ => f c (hc ∘ hL.1)) u l hL.2 v from
     this l [] [] Iff.rfl
   intro L u v hL
   induction l generalizing u v L
   · rename_i sz k' v' l r ih₁ ih₂
     simp only [applyCell, applyPartition.go]
     split <;> rename_i hcmp
-    · exact ih₁ _ _ _ _ (by simpa [contains, hcmp] using hL)
+    · exact ih₁ _ _ _ _ (by simpa [contains', hcmp] using hL)
     · rfl
-    · exact ih₂ _ _ _ _ (by simpa [contains, hcmp] using hL)
+    · exact ih₂ _ _ _ _ (by simpa [contains', hcmp] using hL)
   · simp [applyCell, applyPartition, applyPartition.go]
 
 variable (α β) in
@@ -101,8 +105,8 @@ def explore {γ : Type w} [Ord α] (k : α → Ordering) (init : γ)
 
 open ExplorationStep
 
-theorem applyPartition_go_step [Ord α] {k : α} {init : δ} (l₁ l₂) (l l' : Impl α β) (h)
-  (f : δ → ExplorationStep α β (compare k) → δ) :
+theorem applyPartition_go_step [Ord α] {k : α → Ordering} {init : δ} (l₁ l₂) (l l' : Impl α β) (h)
+  (f : δ → ExplorationStep α β k → δ) :
     applyPartition.go k l' (fun l' c _ r' => f init (.eq l' c r')) l₁ l h l₂ =
     applyPartition.go k l' (fun l' c _ r' => f init (.eq (l₁ ++ l') c (r' ++ l₂))) [] l h [] := by
   suffices ∀ l₃ l₄,
@@ -127,21 +131,21 @@ theorem applyPartition_go_step [Ord α] {k : α} {init : δ} (l₁ l₂) (l l' :
       simp
   · simp [applyPartition.go]
 
-theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
-    (f : δ → ExplorationStep α β (compare k) → δ)
+theorem explore_eq_applyPartition [Ord α] {k : α → Ordering} (init : δ) (l : Impl α β)
+    (f : δ → ExplorationStep α β k → δ)
     (hfr : ∀ {k hk v ll c rr r init}, f (f init (.lt k hk v r)) (.eq ll c rr) = f init (.eq ll c (rr ++ ⟨k, v⟩ :: r)))
     (hfl : ∀ {k hk v ll c rr l init}, f (f init (.gt l k hk v)) (.eq ll c rr) = f init (.eq (l ++ ⟨k, v⟩ :: ll) c rr))
     :
-    explore (compare k) init f l = applyPartition k l fun l c _ r => f init (.eq l c r) := by
+    explore k init f l = applyPartition k l fun l c _ r => f init (.eq l c r) := by
   rw [applyPartition]
-  suffices ∀ L, (h : L.contains k → l.contains k) →
-    explore (compare k) init f l = applyPartition.go k L (fun l_1 c x r => f init (eq l_1 c r)) [] l h [] from this l id
+  suffices ∀ L, (h : L.contains' k → l.contains' k) →
+    explore k init f l = applyPartition.go k L (fun l_1 c x r => f init (eq l_1 c r)) [] l h [] from this l id
   intro L hL
   induction l generalizing init
   · rename_i sz k' v' l r ih₁ ih₂
     rw [explore, applyPartition.go]
     split <;> rename_i hcmp
-    · simp [hcmp, contains] at hL
+    · simp [hcmp, contains'] at hL
       rw [ih₁ _ hL]
       conv => rhs; rw [applyPartition_go_step]
       simp
@@ -149,7 +153,7 @@ theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
       ext ll c hc rr
       apply hfr
     · simp
-    · simp [hcmp, contains] at hL
+    · simp [hcmp, contains'] at hL
       rw [ih₂ _ hL]
       conv => rhs; rw [applyPartition_go_step]
       simp
@@ -195,7 +199,7 @@ def get?ₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β)
 
 /-- Model implementation of the `get?ₘ` function. -/
 def getₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) (h : l.contains k = true) : β k :=
-  applyCell k l fun c hc => c.get (by simp_all)
+  applyCell k l fun c hc => c.get (by simp_all [contains'_compare])
 
 /-- Model implementation of the `insert` function. -/
 def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : Impl α β :=
@@ -209,7 +213,7 @@ def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β 
     | .gt _ _ _ _ => sofar) l
 
 def lowerBound?ₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
-  applyPartition k l fun _ c _ r => c.inner.or r.head?
+  applyPartition (compare k) l fun _ c _ r => c.inner.or r.head?
 
 /-!
 ## Helper theorems for reasoning with key-value pairs
