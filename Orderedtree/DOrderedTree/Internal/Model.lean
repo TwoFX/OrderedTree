@@ -205,6 +205,7 @@ def getₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) 
 def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : Impl α β :=
   updateCell k (fun _ => .of k v) l h |>.impl
 
+/-- Preliminary model implementation of the `lowerBound?` function. -/
 def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
   explore (compare k) none (fun sofar step =>
     match step with
@@ -212,8 +213,18 @@ def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β 
     | .eq _ c r => c.inner.or r.head? |>.or sofar
     | .gt _ _ _ _ => sofar) l
 
+/-- Model implementation of the `lowerBound?` function. -/
 def lowerBound?ₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
   applyPartition (compare k) l fun _ c _ r => c.inner.or r.head?
+
+def min?ₘ' [Ord α] (l : Impl α β) : Option ((a : α) × β a) :=
+  explore (fun (_ : α) => .lt) none (fun sofar step =>
+    match step with
+    | .lt ky _ y _ => some ⟨ky, y⟩
+    | .eq _ _ r => r.head?.or sofar) l
+
+def min?ₘ [Ord α] (l : Impl α β) : Option ((a : α) × β a) :=
+  applyPartition (fun (_ : α) => .lt) l fun _ _ _ r => r.head?
 
 /-!
 ## Helper theorems for reasoning with key-value pairs
@@ -274,6 +285,16 @@ theorem lowerBound?ₘ'_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
     cases c.inner <;> simp
   · intros k hcmp v ll c rr l init
     simp
+
+theorem min?_eq_min?ₘ' [Ord α] {l : Impl α β} : l.min? = l.min?ₘ' := by
+  rw [min?ₘ']
+  induction l using min?.induct <;> simp_all [min?, explore]
+
+theorem min?ₘ'_eq_min?ₘ [Ord α] {l : Impl α β} : l.min?ₘ' = l.min?ₘ := by
+  rw [min?ₘ', explore_eq_applyPartition, min?ₘ] <;> simp
+
+theorem min?_eq_min?ₘ [Ord α] {l : Impl α β} : l.min? = l.min?ₘ := by
+  rw [min?_eq_min?ₘ', min?ₘ'_eq_min?ₘ]
 
 theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
     l.lowerBound? k = l.lowerBound?ₘ k := by

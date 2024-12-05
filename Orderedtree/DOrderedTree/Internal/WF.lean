@@ -5,6 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.Model
 import Orderedtree.Classes.TransOrd
+import Orderedtree.Classes.Cut
 import Orderedtree.DOrderedTree.Internal.List.Associative
 import Std.Data.DHashMap.Internal.List.Associative
 
@@ -109,11 +110,13 @@ theorem Ordered.compare_left_beq_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
     (p) (hp : p ∈ l.toListModel) : compare k p.1 == .gt :=
  beq_iff_eq.2 (OrientedCmp.gt_of_lt (TransCmp.lt_of_lt_of_isLE (ho.compare_left hp) hcmp))
 
-theorem Ordered.compare_left_not_beq_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (compare k' k).isLE)
-    (p) (hp : p ∈ l.toListModel) : ¬(compare k p.1 == .eq) := by
-  suffices compare p.fst k = .lt by simp [this, OrientedCmp.eq_comm (a := k)]
-  exact TransCmp.lt_of_lt_of_isLE (ho.compare_left hp) hcmp
+theorem Ordered.compare_left_not_beq_eq [Ord α] [TransOrd α] {k : α → Ordering}
+    [IsStrictCut compare k] {sz k' v' l r}
+    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (k k').isGE)
+    (p) (hp : p ∈ l.toListModel) : ¬(k p.1 == .eq) := by
+  suffices k p.fst = .gt by simp [this, OrientedCmp.eq_comm (a := k)]
+  have := ho.compare_left hp
+  exact IsStrictCut.gt_of_isGE_of_gt hcmp (OrientedCmp.gt_of_lt (ho.compare_left hp))
 
 theorem Ordered.compare_right [Ord α] {sz k v l r}
     (h : (.inner sz k v l r : Impl α β).Ordered) {k'} (hk' : k' ∈ r.toListModel) :
@@ -155,33 +158,33 @@ theorem toListModel_filter_gt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
     List.append_nil]
   simpa [hcmp] using Ordered.compare_right_not_beq_gt ho (Ordering.isLE_of_eq_lt hcmp)
 
-theorem toListModel_find?_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) =
-      r.toListModel.find? (compare k ·.1 == .eq) := by
+theorem toListModel_find?_of_gt [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.find? (k ·.1 == .eq) =
+      r.toListModel.find? (k ·.1 == .eq) := by
   rw [toListModel_inner, List.find?_append, List.find?_eq_none.2, Option.none_or,
     List.find?_cons_of_neg]
   · simp [hcmp]
-  · exact Ordered.compare_left_not_beq_eq ho (Ordering.isLE_of_eq_lt (OrientedCmp.lt_of_gt hcmp))
+  · exact Ordered.compare_left_not_beq_eq ho (Ordering.isGE_of_eq_gt hcmp)
 
-theorem toListModel_find?_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) = some ⟨k', v'⟩ := by
+theorem toListModel_find?_of_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.find? (k ·.1 == .eq) = some ⟨k', v'⟩ := by
   rw [toListModel_inner, List.find?_append, List.find?_eq_none.2, Option.none_or,
     List.find?_cons_of_pos]
   · simp_all
-  · exact Ordered.compare_left_not_beq_eq ho (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hcmp))
+  · exact Ordered.compare_left_not_beq_eq ho (Ordering.isGE_of_eq_eq hcmp)
 
 theorem Option.or_eq_left {o o' : Option α} (h : o' = none) : o.or o' = o := by
   cases h; simp
 
-theorem toListModel_find?_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.find? (compare k ·.1 == .eq) =
-      l.toListModel.find? (compare k ·.1 == .eq) := by
+theorem toListModel_find?_of_lt [Ord α] [TransOrd α] {k : α → Ordering} [IsCut compare k]
+    {sz k' v' l r} (hcmp : k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.find? (k ·.1 == .eq) =
+      l.toListModel.find? (k ·.1 == .eq) := by
   rw [toListModel_inner, List.find?_append, Option.or_eq_left]
   rw [List.find?_cons_of_neg _ (by simp [hcmp])]
-  exact List.find?_eq_none.2 (fun p hp => by simp [TransCmp.lt_trans hcmp (ho.compare_right hp)])
+  refine List.find?_eq_none.2 (fun p hp => by simp [IsCut.lt hcmp (ho.compare_right hp)])
 
 theorem toListModel_filter_lt_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
     (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
@@ -209,19 +212,25 @@ theorem toListModel_filter_lt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
     List.append_cancel_left_eq, List.cons.injEq, List.filter_eq_self, beq_iff_eq, true_and]
   exact fun p hp => TransCmp.lt_trans hcmp (ho.compare_right hp)
 
+instance [Ord α] [TransOrd α] {k : α} : IsStrictCut compare (compare k) where
+  lt := TransCmp.lt_trans
+  gt h₁ h₂ := OrientedCmp.gt_of_lt (TransCmp.lt_trans (OrientedCmp.lt_of_gt h₂)
+    (OrientedCmp.lt_of_gt h₁))
+  eq _ _ := TransCmp.congr_left
+
 theorem findCell_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
     (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
     List.findCell (inner sz k' v' l r).toListModel (compare k) = List.findCell r.toListModel (compare k) :=
   Cell.ext (toListModel_find?_of_gt hcmp ho)
 
-theorem findCell_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
-    List.findCell (inner sz k' v' l r).toListModel (compare k) = Cell.ofEq k' v' hcmp :=
+theorem findCell_of_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .eq) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    List.findCell (inner sz k' v' l r).toListModel k = Cell.ofEq k' v' hcmp :=
   Cell.ext (toListModel_find?_of_eq hcmp ho)
 
-theorem findCell_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
-    List.findCell (inner sz k' v' l r).toListModel (compare k) = List.findCell l.toListModel (compare k) :=
+theorem findCell_of_lt [Ord α] [TransOrd α] {k : α → Ordering} [IsCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .lt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    List.findCell (inner sz k' v' l r).toListModel k = List.findCell l.toListModel k :=
   Cell.ext (toListModel_find?_of_lt hcmp ho)
 
 theorem toListModel_updateCell [Ord α] [TransOrd α] {k : α}
@@ -363,22 +372,22 @@ theorem toListModel_updateAtKey_perm [Ord α] [TransOrd α]
   refine h₂.trans (List.Perm.trans ?_ (hg₁ hlo.distinctKeys h₁).symm)
   rwa [hfg, hg₂, List.findCell_inner]
 
-theorem contains_findCell [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) (h : l.contains' (compare k)) :
-    (List.findCell l.toListModel (compare k)).contains := by
+theorem contains_findCell [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {l : Impl α β} (hlo : l.Ordered) (h : l.contains' k) :
+    (List.findCell l.toListModel k).contains := by
   induction l
   · rename_i sz k' v' l r ih₁ ih₂
-    cases hcmp : compare k k' <;> simp [contains', hcmp] at h
+    cases hcmp : k k' <;> simp [contains', hcmp] at h
     · simpa only [findCell_of_lt hcmp hlo] using ih₁ hlo.left h
     · simp only [findCell_of_eq hcmp hlo, Cell.contains_ofEq]
     · simpa only [findCell_of_gt hcmp hlo] using ih₂ hlo.right h
   · simp [contains'] at h
 
-theorem applyPartition_eq [Ord α] [TransOrd α] {k : α} {l : Impl α β}
-    {f : List ((a : α) × β a) → (c : Cell α β (compare k)) → (l.contains' (compare k) → c.contains) → List ((a : α ) × β a) → δ}
+theorem applyPartition_eq [Ord α] [TransOrd α] {k : α → Ordering} {l : Impl α β}
+    {f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains' k → c.contains) → List ((a : α ) × β a) → δ}
     (hlo : l.Ordered) :
-    applyPartition (compare k) l f =
-    f (l.toListModel.filter (compare k ·.1 == .gt)) (List.findCell l.toListModel (compare k))
-      (contains_findCell hlo) (l.toListModel.filter (compare k ·.1 == .lt)) := by
+    applyPartition k l f =
+    f (l.toListModel.filter (k ·.1 == .gt)) (List.findCell l.toListModel k)
+      (contains_findCell hlo) (l.toListModel.filter (k ·.1 == .lt)) := by
   rw [applyPartition]
   suffices ∀ ℓ ll rr h, ℓ.Ordered → (∀ p ∈ ll, compare k p.1 = .gt) → (∀ p ∈ rr, compare k p.1 = .lt) →
     (l.toListModel = ll ++ ℓ.toListModel ++ rr) →

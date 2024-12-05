@@ -65,7 +65,7 @@ def get [Ord α] [OrientedOrd α] [LawfulEqOrd α] {k : α} (c : Cell α β (com
   | none => False.elim (by simp [contains, hc] at h)
   | some p => (cast (congrArg β (eq_of_compare (c.property _ hc)).symm) p.2)
 
-theorem ext [Ord α] {k : α} {c c' : Cell α β (compare k)} : c.inner = c'.inner → c = c' := by
+theorem ext [Ord α] {k : α → Ordering} {c c' : Cell α β k} : c.inner = c'.inner → c = c' := by
   cases c; cases c'; simp
 
 end Cell

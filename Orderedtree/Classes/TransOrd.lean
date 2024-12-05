@@ -36,6 +36,12 @@ theorem Ordering.isLE_of_eq_lt {o : Ordering} : o = .lt → o.isLE := by
 theorem Ordering.isLE_of_eq_eq {o : Ordering} : o = .eq → o.isLE := by
   rintro rfl; rfl
 
+theorem Ordering.isGE_of_eq_gt {o : Ordering} : o = .gt → o.isGE := by
+  rintro rfl; rfl
+
+theorem Ordering.isGE_of_eq_eq {o : Ordering} : o = .eq → o.isGE := by
+  rintro rfl; rfl
+
 -- https://github.com/leanprover/lean4/issues/5295
 instance : LawfulBEq Ordering where
   eq_of_beq {a b} := by cases a <;> cases b <;> simp <;> rfl
@@ -166,5 +172,12 @@ theorem TransCmp.eq_trans [TransCmp cmp] {a b c : α} (hab : cmp a b = .eq)
   · rw [← OrientedCmp.eq_swap]
     exact TransCmp.le_trans (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hbc))
       (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hab))
+
+theorem TransCmp.congr_left [TransCmp cmp] {a b c : α} (hab : cmp a b = .eq) :
+    cmp a c = cmp b c := by
+  cases hbc : cmp b c with
+  | lt => exact TransCmp.lt_of_eq_of_lt hab hbc
+  | eq => exact TransCmp.eq_trans hab hbc
+  | gt => exact OrientedCmp.gt_of_lt (TransCmp.lt_of_lt_of_eq (OrientedCmp.lt_of_gt hbc) (OrientedCmp.eq_symm hab))
 
 end
