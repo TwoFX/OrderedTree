@@ -574,12 +574,19 @@ theorem Balanced.at_root {sz k v l r} : (Impl.inner sz k v l r : Impl α β).Bal
 theorem BalancedAtRoot.symm {l r : Nat} : BalancedAtRoot l r → BalancedAtRoot r l := by
   tree_tac
 
+theorem BalancedAtRoot.erase_left {l l' r : Nat} : BalancedAtRoot l r → l - 1 ≤ l' → l' ≤ l →
+    BalanceLErasePrecond r l' := by tree_tac
+
+theorem BalancedAtRoot.erase_right {l r r' : Nat} : BalancedAtRoot l r → r - 1 ≤ r' → r' ≤ r →
+    BalanceLErasePrecond l r' :=
+  fun h h₁ h₂ => h.symm.erase_left h₁ h₂
+
 theorem BalancedAtRoot.adjust_left {l l' r : Nat} : BalancedAtRoot l r → l - 1 ≤ l' → l' ≤ l + 1 →
     BalanceLErasePrecond l' r ∨ BalanceLErasePrecond r l' := by tree_tac
 
 theorem BalancedAtRoot.adjust_right {l r r' : Nat} : BalancedAtRoot l r → r - 1 ≤ r' → r' ≤ r + 1 →
     BalanceLErasePrecond l r' ∨ BalanceLErasePrecond r' l :=
-  fun h h₁ h₂ => h.symm |>.adjust_left h₁ h₂ |>.symm
+  fun h h₁ h₂ => h.symm.adjust_left h₁ h₂ |>.symm
 
 theorem balanceLErasePrecond_zero_iff {n : Nat} : BalanceLErasePrecond 0 n ↔ n ≤ 1 := by
   tree_tac
@@ -1032,11 +1039,15 @@ attribute [tree_tac] Tree.balanced_impl Tree.size_impl
 /-- Returns the tree `l ++ ⟨k, v⟩ ++ r`, with the smallest element chopped off. -/
 def minView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced)
     (hlr : BalancedAtRoot l.size r.size) : View α β (l.size + r.size) :=
-  match h : l with
+  match l with
   | leaf => ⟨k, v, ⟨r, hr, ✓⟩⟩
   | inner _ k' v' l' r' =>
       let ⟨dk, dv, ⟨dt, hdt, hdt'⟩⟩ := minView k' v' l' r' ✓ ✓ ✓
-      ⟨dk, dv, ⟨balanceRErase k v dt r ✓ ✓ ✓, ✓, ✓⟩⟩
+      ⟨dk, dv, ⟨balanceRErase k v dt r ✓ ✓ (by as_aux_lemma =>
+        exact hlr.erase_left
+          (by simp only [hdt', hl.eq, size_inner]; omega)
+          (by simp only [hdt', hl.eq, size_inner]; omega)), ✓, ✓⟩⟩
+  where triviality {n m : Nat} : n + 1 + m - 1 = n + m := by omega
 
 /-- Slow version of `minView` which can be used in the absence of balance information but still
 assumes the preconditions of `minView`, otherwise might panic. -/
@@ -1054,7 +1065,9 @@ def maxView (k : α) (v : β k) (l r : Impl α β) (hl : l.Balanced) (hr : r.Bal
   | leaf => ⟨k, v, ⟨l, hl, ✓⟩⟩
   | inner _ k' v' l' r' =>
       let ⟨dk, dv, ⟨dt, hdt, hdt'⟩⟩ := maxView k' v' l' r' ✓ ✓ ✓
-      ⟨dk, dv, ⟨balanceLErase k v l dt ✓ ✓ ✓, ✓, ✓⟩⟩
+      ⟨dk, dv, ⟨balanceLErase k v l dt ✓ ✓ (by as_aux_lemma =>
+        simp only [hdt', size_inner, hr.eq] at *
+        apply hlr.erase_right <;> omega), ✓, ✓⟩⟩
 
 /-- Slow version of `maxView` which can be used in the absence of balance information but still
 assumes the preconditions of `maxView`, otherwise might panic. -/
@@ -1080,13 +1093,17 @@ def glue (l r : Impl α β) (hl : l.Balanced) (hr : r.Balanced) (hlr : BalancedA
     | .leaf => l
     | .inner sz' k' v' l'' r'' =>
       if sz < sz' then
-        let d := minView k' v' l'' r'' ✓ ✓ ✓
-        balanceLErase d.k d.v (.inner sz k v l' r') d.tree.impl hl ✓
-          (by as_aux_lemma => simp only [tree_tac] at hl hr hlr; tree_tac)
+        let ⟨dk, dv, ⟨dt, hdt, hdt'⟩⟩ := minView k' v' l'' r'' ✓ ✓ ✓
+        balanceLErase dk dv (.inner sz k v l' r') dt hl ✓
+          (by as_aux_lemma =>
+            simp only [hdt', size_inner, hr.eq] at *
+            apply hlr.erase_right <;> omega)
       else
-        let d := maxView k v l' r' ✓ ✓ ✓
-        balanceRErase d.k d.v d.tree.impl (.inner sz' k' v' l'' r'') ✓ hr
-          (by as_aux_lemma => simp only [tree_tac] at hl hr hlr; tree_tac)
+        let ⟨dk, dv, ⟨dt, hdt, hdt'⟩⟩ := maxView k v l' r' ✓ ✓ ✓
+        balanceRErase dk dv dt (.inner sz' k' v' l'' r'') ✓ hr
+          (by as_aux_lemma =>
+            simp only [hdt', size_inner, hl.eq] at *
+            apply hlr.erase_left <;> omega)
 
 @[tree_tac]
 theorem size_glue {l r : Impl α β} {hl hr hlr} : (glue l r hl hr hlr).size = l.size + r.size := by
@@ -1573,22 +1590,22 @@ end Impl
 
 end Std.DOrderedTree.Internal
 
-open Lean
+-- open Lean
 
-run_meta do
-  let env ← getEnv
-  let mut arr : Array (Nat × Name × MessageData) := #[]
-  let mut unknown : Array Name := #[]
-  let mut totalSize : Nat := 0
-  for (name, info) in env.constants do
-    if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
-      if let some e := info.value? then
-        let numObjs ← e.numObjs
-        arr := arr.push (numObjs, (name, m!"{info.type}"))
-        totalSize := totalSize + numObjs
-      else
-        unknown := unknown.push name
-  arr := arr.qsort (fun a b => a.1 > b.1)
-  logInfo m!"total size: {totalSize}"
-  for (a, (b, c)) in arr do
-    logInfo m!"({a}, {b}, {c})"
+-- run_meta do
+--   let env ← getEnv
+--   let mut arr : Array (Nat × Name × MessageData) := #[]
+--   let mut unknown : Array Name := #[]
+--   let mut totalSize : Nat := 0
+--   for (name, info) in env.constants do
+--     if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
+--       if let some e := info.value? then
+--         let numObjs ← e.numObjs
+--         arr := arr.push (numObjs, (name, m!"{info.type}"))
+--         totalSize := totalSize + numObjs
+--       else
+--         unknown := unknown.push name
+--   arr := arr.qsort (fun a b => a.1 > b.1)
+--   logInfo m!"total size: {totalSize}"
+--   for (a, (b, c)) in arr do
+--     logInfo m!"({a}, {b}, {c})"
