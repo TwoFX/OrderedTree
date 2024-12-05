@@ -567,6 +567,20 @@ theorem Balanced.left {sz k v l r} : (Impl.inner sz k v l r : Impl α β).Balanc
 theorem Balanced.right {sz k v l r} : (Impl.inner sz k v l r : Impl α β).Balanced → r.Balanced
   | .inner _ h _ _ => h
 
+theorem Balanced.at_root {sz k v l r} : (Impl.inner sz k v l r : Impl α β).Balanced →
+    BalancedAtRoot l.size r.size
+  | .inner _ _ h _ => h
+
+theorem BalancedAtRoot.symm {l r : Nat} : BalancedAtRoot l r → BalancedAtRoot r l := by
+  tree_tac
+
+theorem BalancedAtRoot.adjust_left {l l' r : Nat} : BalancedAtRoot l r → l - 1 ≤ l' → l' ≤ l + 1 →
+    BalanceLErasePrecond l' r ∨ BalanceLErasePrecond r l' := by tree_tac
+
+theorem BalancedAtRoot.adjust_right {l r r' : Nat} : BalancedAtRoot l r → r - 1 ≤ r' → r' ≤ r + 1 →
+    BalanceLErasePrecond l r' ∨ BalanceLErasePrecond r' l :=
+  fun h h₁ h₂ => h.symm |>.adjust_left h₁ h₂ |>.symm
+
 theorem balanceLErasePrecond_zero_iff {n : Nat} : BalanceLErasePrecond 0 n ↔ n ≤ 1 := by
   tree_tac
 
@@ -825,12 +839,13 @@ theorem balanceLErase_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hl
 theorem balanceLSlow_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced)
     (hrb : r.Balanced) (hlr : BalanceLErasePrecond l.size r.size) :
     balanceLSlow k v l r = balanceSlow k v l r := by
-  rw [balanceLSlow.eq_def, balanceSlow.eq_def]
-  repeat' (split; try dsimp)
+  cases k, v, l, r using balanceSlow.fun_cases
+  all_goals
+    simp only [balanceLSlow, balanceSlow, *, if_true, if_false, true_and, size_inner, size_leaf]
+  all_goals try rfl
   all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
-  all_goals try (exfalso; tree_tac)
-  tree_tac
+  all_goals try (exfalso; tree_tac; done)
+  all_goals congr; tree_tac
 
 theorem balanceR_eq_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceR k v l r hlb hrb hlr = balanceRErase k v l r hlb hrb hlr.erase := by
@@ -860,12 +875,13 @@ theorem balanceRErase_eq_balanceRSlow {k : α} {v : β k} {l r : Impl α β} {hl
 theorem balanceRSlow_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced)
     (hrb : r.Balanced) (hlr : BalanceLErasePrecond r.size l.size) :
     balanceRSlow k v l r = balanceSlow k v l r := by
-  rw [balanceRSlow.eq_def, balanceSlow.eq_def]
-  repeat' (split; try dsimp)
+  cases k, v, l, r using balanceSlow.fun_cases
+  all_goals
+    simp only [balanceRSlow, balanceSlow, *, if_true, if_false, true_and, size_inner, size_leaf]
+  all_goals try rfl
   all_goals try contradiction
-  all_goals simp_all [-Nat.not_lt]
-  all_goals try (exfalso; tree_tac)
-  tree_tac
+  all_goals try (exfalso; tree_tac; done)
+  all_goals congr; tree_tac
 
 theorem balance_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balance k v l r hlb hrb hlr = balanceSlow k v l r := by
@@ -1440,10 +1456,10 @@ def modify [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ =
     match compare k k' with
     | .lt =>
         let ⟨d, hd, hd'₁, hd'₂⟩ := modify k f l' ✓
-        ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓, ✓⟩
+        ⟨balance k' v' d r' ✓ ✓ (hl.at_root.adjust_left hd'₁ hd'₂), ✓, ✓, ✓⟩
     | .gt =>
         let ⟨d, hd, hd'₁, hd'₂⟩ := modify k f r' ✓
-        ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓, ✓⟩
+        ⟨balance k' v' l' d ✓ ✓ (hl.at_root.adjust_right hd'₁ hd'₂), ✓, ✓, ✓⟩
     | .eq =>
       match f (some v') with
       | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓, ✓⟩
@@ -1484,10 +1500,10 @@ def modify [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β 
     match h : compare k k' with
     | .lt =>
         let ⟨d, hd, hd'₁, hd'₂⟩ := modify k f l' ✓
-        ⟨balance k' v' d r' ✓ ✓ ✓, ✓, ✓, ✓⟩
+        ⟨balance k' v' d r' ✓ ✓ (hl.at_root.adjust_left hd'₁ hd'₂), ✓, ✓, ✓⟩
     | .gt =>
         let ⟨d, hd, hd'₁, hd'₂⟩ := modify k f r' ✓
-        ⟨balance k' v' l' d ✓ ✓ ✓, ✓, ✓, ✓⟩
+        ⟨balance k' v' l' d ✓ ✓ (hl.at_root.adjust_right hd'₁ hd'₂), ✓, ✓, ✓⟩
     | .eq =>
       match f (some (cast (congrArg β (eq_of_compare h).symm) v')) with
       | none => ⟨glue l' r' ✓ ✓ ✓, ✓, ✓, ✓⟩
@@ -1557,22 +1573,22 @@ end Impl
 
 end Std.DOrderedTree.Internal
 
--- open Lean
+open Lean
 
--- run_meta do
---   let env ← getEnv
---   let mut arr : Array (Nat × Name × MessageData) := #[]
---   let mut unknown : Array Name := #[]
---   let mut totalSize : Nat := 0
---   for (name, info) in env.constants do
---     if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
---       if let some e := info.value? then
---         let numObjs ← e.numObjs
---         arr := arr.push (numObjs, (name, m!"{info.type}"))
---         totalSize := totalSize + numObjs
---       else
---         unknown := unknown.push name
---   arr := arr.qsort (fun a b => a.1 > b.1)
---   logInfo m!"total size: {totalSize}"
---   for (a, (b, c)) in arr do
---     logInfo m!"({a}, {b}, {c})"
+run_meta do
+  let env ← getEnv
+  let mut arr : Array (Nat × Name × MessageData) := #[]
+  let mut unknown : Array Name := #[]
+  let mut totalSize : Nat := 0
+  for (name, info) in env.constants do
+    if (`Std.DOrderedTree.Internal.Impl).isPrefixOf name then
+      if let some e := info.value? then
+        let numObjs ← e.numObjs
+        arr := arr.push (numObjs, (name, m!"{info.type}"))
+        totalSize := totalSize + numObjs
+      else
+        unknown := unknown.push name
+  arr := arr.qsort (fun a b => a.1 > b.1)
+  logInfo m!"total size: {totalSize}"
+  for (a, (b, c)) in arr do
+    logInfo m!"({a}, {b}, {c})"
