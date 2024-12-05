@@ -25,9 +25,18 @@ namespace Impl
 ## General infrastructure
 -/
 
+def contains' [Ord α] (k : α → Ordering) (l : Impl α β) : Bool :=
+  match l with
+  | .leaf => false
+  | .inner _ k' _ l r =>
+    match k k' with
+    | .lt => contains' k l
+    | .gt => contains' k r
+    | .eq => true
+
 /-- General tree-traversal function. -/
 def applyPartition [Ord α] (k : α) (l : Impl α β)
-    (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains k → c.contains) → List ((a : α) × β a) → δ) : δ :=
+    (f : List ((a : α) × β a) → (c : Cell α β (compare k)) → (l.contains k → c.contains) → List ((a : α) × β a) → δ) : δ :=
   go [] l id []
 where
   go (ll : List ((a : α) × β a)) (m : Impl α β) (hm : l.contains k → m.contains k) (rr : List ((a : α) × β a)) : δ :=
@@ -40,7 +49,7 @@ where
     | .gt => go (ll ++ l.toListModel ++ [⟨k', v'⟩]) r (fun hc => have := hm hc; by rw [← this, contains]; simp_all) rr
 
 def applyCell [Ord α] (k : α) (l : Impl α β)
-    (f : (c : Cell α β k) → (l.contains k → c.contains) → δ) : δ :=
+    (f : (c : Cell α β (compare k)) → (l.contains k → c.contains) → δ) : δ :=
   match l with
   | .leaf => f .empty (by simp [contains])
   | .inner _ k' v' l r =>
@@ -50,7 +59,7 @@ def applyCell [Ord α] (k : α) (l : Impl α β)
     | .gt => applyCell k r (fun c h => f c fun h' => h (by simpa [contains, hcmp] using h'))
 
 theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
-    (f : (c : Cell α β k) → (l.contains k → c.contains) → δ) :
+    (f : (c : Cell α β (compare k)) → (l.contains k → c.contains) → δ) :
     applyCell k l f = applyPartition k l (fun _ c hc _ => f c hc) := by
   rw [applyPartition]
   suffices ∀ L u v, (hL : l.contains k ↔ L.contains k) →
@@ -68,24 +77,24 @@ theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
 
 variable (α β) in
 /-- Data structure used by the general tree-traversal function `explore`. -/
-inductive ExplorationStep [Ord α] (k : α) where
+inductive ExplorationStep [Ord α] (k : α → Ordering) where
   /-- Needle was less than key at this node: return key-value pair and unexplored right subtree,
       recusion will continue in left subtree. -/
-  | lt : (a : α) → compare k a = .lt → β a → List ((a : α) × β a) → ExplorationStep k
+  | lt : (a : α) → k a = .lt → β a → List ((a : α) × β a) → ExplorationStep k
   /-- Needle was equal to key at this node: return key-value pair and both unexplored subtrees,
       recursion will terminate. -/
   | eq : List ((a : α) × β a) → Cell α β k → List ((a : α) × β a) → ExplorationStep k
   /-- Needle was larger than key at this node: return key-value pair and unexplored left subtree,
       recusion will containue in right subtree. -/
-  | gt : List ((a : α) × β a) → (a : α) → compare k a = .gt → β a → ExplorationStep k
+  | gt : List ((a : α) × β a) → (a : α) → k a = .gt → β a → ExplorationStep k
 
 /-- General tree-traversal function. -/
-def explore {γ : Type w} [Ord α] (k : α) (init : γ)
+def explore {γ : Type w} [Ord α] (k : α → Ordering) (init : γ)
     (inner : γ → ExplorationStep α β k → γ) (l : Impl α β) : γ :=
   match l with
   | .leaf => inner init (.eq [] .empty [])
   | .inner _ ky y l r =>
-    match h : compare k ky with
+    match h : k ky with
     | .lt => explore k (inner init <| .lt ky h y r.toListModel) inner l
     | .eq => inner init <| .eq l.toListModel (Cell.ofEq ky y h) r.toListModel
     | .gt => explore k (inner init <| .gt l.toListModel ky h y) inner r
@@ -93,7 +102,7 @@ def explore {γ : Type w} [Ord α] (k : α) (init : γ)
 open ExplorationStep
 
 theorem applyPartition_go_step [Ord α] {k : α} {init : δ} (l₁ l₂) (l l' : Impl α β) (h)
-  (f : δ → ExplorationStep α β k → δ) :
+  (f : δ → ExplorationStep α β (compare k) → δ) :
     applyPartition.go k l' (fun l' c _ r' => f init (.eq l' c r')) l₁ l h l₂ =
     applyPartition.go k l' (fun l' c _ r' => f init (.eq (l₁ ++ l') c (r' ++ l₂))) [] l h [] := by
   suffices ∀ l₃ l₄,
@@ -119,14 +128,14 @@ theorem applyPartition_go_step [Ord α] {k : α} {init : δ} (l₁ l₂) (l l' :
   · simp [applyPartition.go]
 
 theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
-    (f : δ → ExplorationStep α β k → δ)
+    (f : δ → ExplorationStep α β (compare k) → δ)
     (hfr : ∀ {k hk v ll c rr r init}, f (f init (.lt k hk v r)) (.eq ll c rr) = f init (.eq ll c (rr ++ ⟨k, v⟩ :: r)))
     (hfl : ∀ {k hk v ll c rr l init}, f (f init (.gt l k hk v)) (.eq ll c rr) = f init (.eq (l ++ ⟨k, v⟩ :: ll) c rr))
     :
-    explore k init f l = applyPartition k l fun l c _ r => f init (.eq l c r) := by
+    explore (compare k) init f l = applyPartition k l fun l c _ r => f init (.eq l c r) := by
   rw [applyPartition]
   suffices ∀ L, (h : L.contains k → l.contains k) →
-    explore k init f l = applyPartition.go k L (fun l_1 c x r => f init (eq l_1 c r)) [] l h [] from this l id
+    explore (compare k) init f l = applyPartition.go k L (fun l_1 c x r => f init (eq l_1 c r)) [] l h [] from this l id
   intro L hL
   induction l generalizing init
   · rename_i sz k' v' l r ih₁ ih₂
@@ -150,7 +159,7 @@ theorem explore_eq_applyPartition [Ord α] {k : α} (init : δ) (l : Impl α β)
   · simp [explore, applyPartition.go]
 
 /-- General "update the mapping for a given key" function. -/
-def updateCell [Ord α] (k : α) (f : Cell α β k → Cell α β k)
+def updateCell [Ord α] (k : α) (f : Cell α β (compare k) → Cell α β (compare k))
     (l : Impl α β) (hl : Balanced l) : TreeB α β (l.size - 1) (l.size + 1) :=
   match l with
   | leaf => match (f .empty).inner with
@@ -193,7 +202,7 @@ def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : I
   updateCell k (fun _ => .of k v) l h |>.impl
 
 def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
-  explore k none (fun sofar step =>
+  explore (compare k) none (fun sofar step =>
     match step with
     | .lt ky _ y _ => some ⟨ky, y⟩
     | .eq _ c r => c.inner.or r.head? |>.or sofar
@@ -243,7 +252,7 @@ theorem get?_eq_get?ₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l :
 theorem lowerBound?_eq_lowerBound?ₘ' [Ord α] {k : α} {l : Impl α β} :
     l.lowerBound? k = l.lowerBound?ₘ' k := by
   rw [lowerBound?, lowerBound?ₘ']
-  suffices ∀ o, lowerBound?.go k o l = explore k o _ l from this none
+  suffices ∀ o, lowerBound?.go k o l = explore (compare k) o _ l from this none
   intro o
   induction l generalizing o
   · rename_i sz k' v' l r ih₁ ih₂
