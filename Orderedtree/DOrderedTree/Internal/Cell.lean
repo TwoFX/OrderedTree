@@ -32,15 +32,15 @@ def ofEq [Ord α] {k : α → Ordering} (k' : α) (v' : β k') (hcmp : ∀ [Orie
 def of [Ord α] (k : α) (v : β k) : Cell α β (compare k) :=
   .ofEq k v (by intro; simp)
 
-@[simp] theorem ofEq_inner [Ord α] {k k' : α} {v' : β k'} {h} :
-  (Cell.ofEq k' v' h : Cell α β (compare k)).inner = some ⟨k', v'⟩ := rfl
+@[simp] theorem ofEq_inner [Ord α] {k : α → Ordering} {k' : α} {v' : β k'} {h} :
+  (Cell.ofEq k' v' h : Cell α β k).inner = some ⟨k', v'⟩ := rfl
 @[simp] theorem of_inner [Ord α] {k : α} {v : β k} : (Cell.of k v).inner = some ⟨k, v⟩ := rfl
 
 /-- Create an empty cell. -/
 def empty [Ord α] {k : α → Ordering} : Cell α β k :=
   ⟨none, by simp⟩
 
-@[simp] theorem empty_inner [Ord α] {k : α} : (Cell.empty : Cell α β (compare k)).inner = none := rfl
+@[simp] theorem empty_inner [Ord α] {k : α → Ordering} : (Cell.empty : Cell α β k).inner = none := rfl
 
 def contains [Ord α] {k : α → Ordering} (c : Cell α β k) : Bool :=
   c.inner.isSome

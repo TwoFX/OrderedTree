@@ -105,17 +105,16 @@ theorem Ordered.compare_left [Ord α] {sz k v l r} (h : (.inner sz k v l r : Imp
     {k'} (hk' : k' ∈ l.toListModel) : compare k'.1 k = .lt :=
   h.rel_of_mem_append hk' (List.mem_cons_self _ _)
 
-theorem Ordered.compare_left_beq_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (compare k' k).isLE)
-    (p) (hp : p ∈ l.toListModel) : compare k p.1 == .gt :=
- beq_iff_eq.2 (OrientedCmp.gt_of_lt (TransCmp.lt_of_lt_of_isLE (ho.compare_left hp) hcmp))
+theorem Ordered.compare_left_beq_gt [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (k k').isGE)
+    (p) (hp : p ∈ l.toListModel) : k p.1 == .gt :=
+ beq_iff_eq.2 (IsStrictCut.gt_of_isGE_of_gt hcmp (OrientedCmp.gt_of_lt (ho.compare_left hp)))
 
 theorem Ordered.compare_left_not_beq_eq [Ord α] [TransOrd α] {k : α → Ordering}
     [IsStrictCut compare k] {sz k' v' l r}
     (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (k k').isGE)
     (p) (hp : p ∈ l.toListModel) : ¬(k p.1 == .eq) := by
   suffices k p.fst = .gt by simp [this, OrientedCmp.eq_comm (a := k)]
-  have := ho.compare_left hp
   exact IsStrictCut.gt_of_isGE_of_gt hcmp (OrientedCmp.gt_of_lt (ho.compare_left hp))
 
 theorem Ordered.compare_right [Ord α] {sz k v l r}
@@ -123,37 +122,38 @@ theorem Ordered.compare_right [Ord α] {sz k v l r}
     compare k k'.1 = .lt := by
   exact List.rel_of_pairwise_cons (h.sublist (List.sublist_append_right _ _)) hk'
 
-theorem Ordered.compare_right_not_beq_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (compare k k').isLE)
-    (p) (hp : p ∈ r.toListModel) : ¬(compare k p.1 == .gt) := by
-  suffices compare k p.fst = .lt by simp [this]
-  exact TransCmp.lt_of_isLE_of_lt hcmp (ho.compare_right hp)
+theorem Ordered.compare_right_not_beq_gt [Ord α] [TransOrd α] {k : α → Ordering}
+    [IsStrictCut compare k] {sz k' v' l r}
+    (ho : (.inner sz k' v' l r : Impl α β).Ordered) (hcmp : (k k').isLE)
+    (p) (hp : p ∈ r.toListModel) : ¬(k p.1 == .gt) := by
+  suffices k p.fst = .lt by simp [this]
+  exact IsStrictCut.lt_of_isLE_of_lt hcmp (ho.compare_right hp)
 
 /-!
 ## Verification of model functions
 -/
 
-theorem toListModel_filter_gt_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .gt) =
-      l.toListModel ++ ⟨k', v'⟩ :: r.toListModel.filter (compare k ·.1 == .gt) := by
+theorem toListModel_filter_gt_of_gt [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k]
+    {sz k' v' l r} (hcmp : k k' = .gt) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.filter (k ·.1 == .gt) =
+      l.toListModel ++ ⟨k', v'⟩ :: r.toListModel.filter (k ·.1 == .gt) := by
   rw [toListModel_inner, List.filter_append, List.filter_cons_of_pos, List.filter_eq_self.2]
-  · exact Ordered.compare_left_beq_gt ho (Ordering.isLE_of_eq_lt (OrientedCmp.lt_of_gt hcmp))
+  · exact Ordered.compare_left_beq_gt ho (Ordering.isGE_of_eq_gt hcmp)
   · simpa
 
-theorem toListModel_filter_gt_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .gt) = l.toListModel := by
+theorem toListModel_filter_gt_of_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k]
+    {sz k' v' l r} (hcmp : k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.filter (k ·.1 == .gt) = l.toListModel := by
   rw [toListModel_inner, List.filter_append, List.filter_cons_of_neg, List.filter_eq_self.2,
     List.filter_eq_nil_iff.2, List.append_nil]
   · exact Ordered.compare_right_not_beq_gt ho (Ordering.isLE_of_eq_eq hcmp)
-  · exact Ordered.compare_left_beq_gt ho (Ordering.isLE_of_eq_eq (OrientedCmp.eq_symm hcmp))
+  · exact Ordered.compare_left_beq_gt ho (Ordering.isGE_of_eq_eq hcmp)
   · simp_all
 
-theorem toListModel_filter_gt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .gt) =
-      l.toListModel.filter (compare k ·.1 == .gt) := by
+theorem toListModel_filter_gt_of_lt [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.filter (k ·.1 == .gt) =
+      l.toListModel.filter (k ·.1 == .gt) := by
   rw [toListModel_inner, List.filter_append, (List.filter_eq_nil_iff (l := _ :: _)).2,
     List.append_nil]
   simpa [hcmp] using Ordered.compare_right_not_beq_gt ho (Ordering.isLE_of_eq_lt hcmp)
@@ -195,14 +195,13 @@ theorem toListModel_filter_lt_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l 
   exact fun p hp => by simp [OrientedCmp.gt_of_lt <|
     TransCmp.lt_trans (ho.compare_left hp) (OrientedCmp.lt_of_gt hcmp)]
 
-theorem toListModel_filter_lt_of_eq [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
-    (inner sz k' v' l r : Impl α β).toListModel.filter (compare k ·.1 == .lt) = r.toListModel := by
+theorem toListModel_filter_lt_of_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .eq) (ho : (inner sz k' v' l r).Ordered) :
+    (inner sz k' v' l r : Impl α β).toListModel.filter (k ·.1 == .lt) = r.toListModel := by
   rw [toListModel_inner, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append,
     List.filter_cons_of_neg (by simp [hcmp]), List.filter_eq_self]
-  · exact fun p hp => by simp [TransCmp.lt_of_eq_of_lt hcmp (ho.compare_right hp)]
-  · exact fun p hp => by simp [OrientedCmp.gt_of_lt <|
-      TransCmp.lt_of_lt_of_eq (ho.compare_left hp) (OrientedCmp.eq_symm hcmp)]
+  · exact fun p hp => by simp [IsStrictCut.lt_of_isLE_of_lt (Ordering.isLE_of_eq_eq hcmp) (ho.compare_right hp)]
+  · exact fun p hp => by simp [IsStrictCut.gt_of_isGE_of_gt (Ordering.isGE_of_eq_eq hcmp) (OrientedCmp.gt_of_lt (ho.compare_left hp))]
 
 theorem toListModel_filter_lt_of_lt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
     (hcmp : compare k k' = .lt) (ho : (inner sz k' v' l r).Ordered) :
@@ -218,9 +217,9 @@ instance [Ord α] [TransOrd α] {k : α} : IsStrictCut compare (compare k) where
     (OrientedCmp.lt_of_gt h₁))
   eq _ _ := TransCmp.congr_left
 
-theorem findCell_of_gt [Ord α] [TransOrd α] {k : α} {sz k' v' l r}
-    (hcmp : compare k k' = .gt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
-    List.findCell (inner sz k' v' l r).toListModel (compare k) = List.findCell r.toListModel (compare k) :=
+theorem findCell_of_gt [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
+    (hcmp : k k' = .gt) (ho : (inner sz k' v' l r : Impl α β).Ordered) :
+    List.findCell (inner sz k' v' l r).toListModel k = List.findCell r.toListModel k :=
   Cell.ext (toListModel_find?_of_gt hcmp ho)
 
 theorem findCell_of_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {sz k' v' l r}
@@ -382,17 +381,17 @@ theorem contains_findCell [Ord α] [TransOrd α] {k : α → Ordering} [IsStrict
     · simpa only [findCell_of_gt hcmp hlo] using ih₂ hlo.right h
   · simp [contains'] at h
 
-theorem applyPartition_eq [Ord α] [TransOrd α] {k : α → Ordering} {l : Impl α β}
+theorem applyPartition_eq [Ord α] [TransOrd α] {k : α → Ordering} [IsStrictCut compare k] {l : Impl α β}
     {f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains' k → c.contains) → List ((a : α ) × β a) → δ}
     (hlo : l.Ordered) :
     applyPartition k l f =
     f (l.toListModel.filter (k ·.1 == .gt)) (List.findCell l.toListModel k)
       (contains_findCell hlo) (l.toListModel.filter (k ·.1 == .lt)) := by
   rw [applyPartition]
-  suffices ∀ ℓ ll rr h, ℓ.Ordered → (∀ p ∈ ll, compare k p.1 = .gt) → (∀ p ∈ rr, compare k p.1 = .lt) →
+  suffices ∀ ℓ ll rr h, ℓ.Ordered → (∀ p ∈ ll, k p.1 = .gt) → (∀ p ∈ rr, k p.1 = .lt) →
     (l.toListModel = ll ++ ℓ.toListModel ++ rr) →
-      applyPartition.go (compare k) l f ll ℓ h rr = f (l.toListModel.filter (compare k ·.1 == .gt)) (List.findCell l.toListModel (compare k)) (contains_findCell hlo)
-        (l.toListModel.filter (compare k ·.1 == .lt)) by simpa using this l [] [] id hlo
+      applyPartition.go k l f ll ℓ h rr = f (l.toListModel.filter (k ·.1 == .gt)) (List.findCell l.toListModel k) (contains_findCell hlo)
+        (l.toListModel.filter (k ·.1 == .lt)) by simpa using this l [] [] id hlo
   intro ℓ ll rr h hℓo hll hrr hl
   induction ℓ generalizing ll rr
   · rename_i sz k' v' l' r' ih₁ ih₂
@@ -402,7 +401,7 @@ theorem applyPartition_eq [Ord α] [TransOrd α] {k : α → Ordering} {l : Impl
       · exact hll
       · simp only [List.mem_cons, List.mem_append, forall_eq_or_imp, hcmp, true_and]
         rintro p (hp|hp)
-        · exact TransCmp.lt_trans hcmp (hℓo.compare_right hp)
+        · exact IsCut.lt hcmp (hℓo.compare_right hp)
         · exact hrr _ hp
       · simp [hl]
     · congr
@@ -422,7 +421,7 @@ theorem applyPartition_eq [Ord α] [TransOrd α] {k : α → Ordering} {l : Impl
       · simp only [List.mem_append, List.mem_singleton]
         rintro p (hp|hp|rfl)
         · exact hll _ hp
-        · exact OrientedCmp.gt_of_lt (TransCmp.lt_trans (hℓo.compare_left hp) (OrientedCmp.lt_of_gt hcmp))
+        · exact IsCut.gt hcmp (OrientedCmp.gt_of_lt (hℓo.compare_left hp))
         · exact hcmp
       · exact hrr
       · simp [hl]

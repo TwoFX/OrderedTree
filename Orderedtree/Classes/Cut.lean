@@ -23,3 +23,10 @@ theorem IsStrictCut.gt_of_isGE_of_gt [IsStrictCut cmp cut] {k k' : α} :
   | lt => rintro ⟨⟩
   | gt => exact fun _ => IsCut.gt h₁
   | eq => exact fun h₂ h₃ => by rw [← h₃, IsStrictCut.eq (cmp := cmp) k h₁]
+
+theorem IsStrictCut.lt_of_isLE_of_lt [IsStrictCut cmp cut] {k k' : α} :
+    (cut k').isLE → cmp k' k = .lt → cut k = .lt := by
+  cases h₁ : cut k' with
+  | gt => rintro ⟨⟩
+  | lt => exact fun _ => IsCut.lt h₁
+  | eq => exact fun h₂ h₃ => by rw [← h₃, IsStrictCut.eq (cmp := cmp) k h₁]
