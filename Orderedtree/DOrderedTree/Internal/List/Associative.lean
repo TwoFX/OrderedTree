@@ -127,6 +127,10 @@ namespace Std.DHashMap.Internal.List
 def lowerBound? [Ord α] (k : α) (xs : List ((a : α) × β a)) : Option ((a : α) × β a) :=
   xs.filter (fun p => compare k p.1 |>.isLE) |>.min?
 
+/-- Like `List.min?`, but using an `Ord` typeclass instead of a `Min` typeclass. -/
+def min?' [Ord α] (xs : List ((a : α) × β a)) : Option ((a : α) × β a) :=
+  xs.min?
+
 theorem lowerBound?_mem [Ord α] {xs : List ((a : α) × β a)} {k : α} {p : (a : α) × β a} (h : lowerBound? k xs = some p) :
     p ∈ xs := by
   rw [lowerBound?] at h
@@ -237,6 +241,10 @@ theorem lowerBound?_append_of_forall_mem_left [Ord α] [TransOrd α] {l₁ l₂ 
     lowerBound? k (l₁ ++ l₂) = lowerBound? k l₂ := by
   rw [lowerBound?, lowerBound?, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append]
   refine fun p hp => by simpa using h p hp
+
+theorem min?'_eq_head? [Ord α] {l : List ((a : α) × β a)}
+    (hl : l.Pairwise (fun a b => compare a.1 b.1 = .lt)) : min?' l = l.head? := by
+  rw [min?', List.min?_eq_head? (hl.imp min_eq_left_of_lt)]
 
 theorem lowerBound?_eq_head? [Ord α] {l : List ((a : α) × β a)} {k : α} (h : ∀ p ∈ l, compare k p.1 |>.isLE)
     (hl : l.Pairwise (fun a b => compare a.1 b.1 = .lt)) : lowerBound? k l = l.head? := by
