@@ -11,42 +11,42 @@ set_option autoImplicit false
 
 universe u v
 
-theorem Option.unattach_eq_some {α : Type u} {p : α → Prop} {a : α} {o : Option { x // p x}} : o.unattach = some a ↔ ∃ h : p a, o = some ⟨a, h⟩ :=
-  o.rec (by simp) (fun h => ⟨by simp only [unattach_some, some.injEq]; rintro rfl; exact ⟨h.2, rfl⟩,
-    by simp only [some.injEq, unattach_some, forall_exists_index]; rintro hx rfl; rfl⟩)
+-- theorem Option.unattach_eq_some {α : Type u} {p : α → Prop} {a : α} {o : Option { x // p x}} : o.unattach = some a ↔ ∃ h : p a, o = some ⟨a, h⟩ :=
+--   o.rec (by simp) (fun h => ⟨by simp only [unattach_some, some.injEq]; rintro rfl; exact ⟨h.2, rfl⟩,
+--     by simp only [some.injEq, unattach_some, forall_exists_index]; rintro hx rfl; rfl⟩)
 
 -- unused
-theorem List.min?_mem₂ {α : Type u} [Min α] {xs : List α} (min_eq_or : ∀ a b : α, a ∈ xs → b ∈ xs → min a b = a ∨ min a b = b) {a : α} :
-    xs.min? = some a → a ∈ xs := by
-  match xs with
-  | List.nil => simp
-  | x :: xs =>
-    simp only [List.min?_cons', Option.some.injEq, List.mem_cons]
-    intro eq
-    induction xs generalizing x with
-    | nil =>
-      simp at eq
-      simp [eq]
-    | cons y xs ind =>
-      simp at eq
-      have hxy : min x y = x ∨ min x y = y := min_eq_or x y (List.mem_cons_self _ _) (List.mem_cons_of_mem _ (List.mem_cons_self _ _))
-      have p := ind _ ?_ eq
-      · cases p with
-        | inl p =>
-          cases hxy with | _ q => simp [p, q]
-        | inr p => simp [p, List.mem_cons]
-      · intro a b ha hb
-        apply min_eq_or
-        · refine hxy.elim (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_) (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_)
-          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
-          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
-          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
-          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
-        · refine hxy.elim (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_) (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_)
-          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
-          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
-          · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
-          · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+-- theorem List.min?_mem₂ {α : Type u} [Min α] {xs : List α} (min_eq_or : ∀ a b : α, a ∈ xs → b ∈ xs → min a b = a ∨ min a b = b) {a : α} :
+--     xs.min? = some a → a ∈ xs := by
+--   match xs with
+--   | List.nil => simp
+--   | x :: xs =>
+--     simp only [List.min?_cons', Option.some.injEq, List.mem_cons]
+--     intro eq
+--     induction xs generalizing x with
+--     | nil =>
+--       simp at eq
+--       simp [eq]
+--     | cons y xs ind =>
+--       simp at eq
+--       have hxy : min x y = x ∨ min x y = y := min_eq_or x y (List.mem_cons_self _ _) (List.mem_cons_of_mem _ (List.mem_cons_self _ _))
+--       have p := ind _ ?_ eq
+--       · cases p with
+--         | inl p =>
+--           cases hxy with | _ q => simp [p, q]
+--         | inr p => simp [p, List.mem_cons]
+--       · intro a b ha hb
+--         apply min_eq_or
+--         · refine hxy.elim (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_) (fun hxy => (List.mem_cons.1 ha).elim ?_ ?_)
+--           · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
+--           · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+--           · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
+--           · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+--         · refine hxy.elim (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_) (fun hxy => (List.mem_cons.1 hb).elim ?_ ?_)
+--           · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_self _ _
+--           · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+--           · exact fun h => h ▸ hxy.symm ▸ List.mem_cons_of_mem _ (List.mem_cons_self _ _)
+--           · exact fun h => List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
 
 theorem List.min?_eq_head? {α : Type u} [Min α] {l : List α} (h : l.Pairwise (fun a b => min a b = a)) : l.min? = l.head? := by
   cases l with
