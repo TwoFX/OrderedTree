@@ -34,6 +34,10 @@ structure WF (l : Raw α β cmp) where
 def empty : Raw α β cmp :=
   ⟨Internal.Impl.empty⟩
 
+@[inline]
+def isEmpty (t : Raw α β cmp) : Bool :=
+  t.inner.isEmpty
+
 /-- Inserts the mapping `(a, b)` into the binary search tree. -/
 @[inline]
 def insert (l : Raw α β cmp) (a : α) (b : β a) : Raw α β cmp :=

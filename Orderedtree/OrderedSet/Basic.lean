@@ -25,6 +25,10 @@ def empty : OrderedSet α cmp :=
   ⟨OrderedTree.empty⟩
 
 @[inline]
+def isEmpty (t : OrderedSet α cmp) : Bool :=
+  t.inner.isEmpty
+
+@[inline]
 def insert (l : OrderedSet α cmp) (a : α) : OrderedSet α cmp :=
   ⟨l.inner.insert a ()⟩
 

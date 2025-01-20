@@ -19,6 +19,9 @@ variable {α : Type u} {β : Type v} {cmp : α → α → Ordering}
 
 namespace Std.OrderedSet.Raw
 
+theorem isEmpty_empty : (empty : OrderedSet.Raw α cmp).isEmpty :=
+  OrderedTree.Raw.isEmpty_empty
+
 theorem contains_insert [h : TransCmp cmp] (m : OrderedSet.Raw α cmp) (hm : m.WF) {k a : α} :
     (m.insert k).contains a = (cmp k a == .eq || m.contains a) :=
   OrderedTree.Raw.contains_insert _ hm.out

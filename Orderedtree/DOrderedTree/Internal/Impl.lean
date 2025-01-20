@@ -56,8 +56,8 @@ def size : Impl α β → Nat
 @[tree_tac] theorem size_inner {sz k v l r} : (Impl.inner sz k v l r : Impl α β).size = sz := rfl
 
 /-- Returns `true` if the given key is contained in the map. -/
-def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
-  match l with
+def contains [Ord α] (k : α) (t : Impl α β) : Bool :=
+  match t with
   | .leaf => false
   | .inner _ k' _ l r =>
     match compare k k' with
@@ -67,14 +67,14 @@ def contains [Ord α] (k : α) (l : Impl α β) : Bool :=
 
 /-- Returns `true` if the tree is empty. -/
 @[inline]
-def isEmpty (l : Impl α β) : Bool :=
-  match l with
+def isEmpty (t : Impl α β) : Bool :=
+  match t with
   | .leaf => true
   | .inner _ _ _ _ _ => false
 
 /-- Returns the value for the key `k`, or `none` if such a key does not exist. -/
-def get? [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) : Option (β k) :=
-  match l with
+def get? [Ord α] [LawfulEqOrd α] (k : α) (t : Impl α β) : Option (β k) :=
+  match t with
   | .leaf => none
   | .inner _ k' v' l r =>
     match h : compare k k' with
@@ -83,8 +83,8 @@ def get? [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) : Option (β k) :=
     | .eq => some (cast (congrArg β (eq_of_compare h).symm) v')
 
 /-- Returns the value for the key `k`. -/
-def get [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (hlk : l.contains k = true) : β k :=
-  match l with
+def get [Ord α] [LawfulEqOrd α] (k : α) (t : Impl α β) (hlk : t.contains k = true) : β k :=
+  match t with
   | .inner _ k' v' l r =>
     match h : compare k k' with
     | .lt => get k l (by simpa [contains, h] using hlk)
@@ -92,8 +92,8 @@ def get [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (hlk : l.contains k 
     | .eq => cast (congrArg β (eq_of_compare h).symm) v'
 
 /-- Returns the value for the key `k`, or panics if such a key does not exist. -/
-def get! [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) [Inhabited (β k)] : β k :=
-  match l with
+def get! [Ord α] [LawfulEqOrd α] (k : α) (t : Impl α β) [Inhabited (β k)] : β k :=
+  match t with
   | .leaf => panic! "Key is not present in map"
   | .inner _ k' v' l r =>
     match h : compare k k' with
@@ -102,8 +102,8 @@ def get! [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) [Inhabited (β k)] 
     | .eq => cast (congrArg β (eq_of_compare h).symm) v'
 
 /-- Returns the value for the key `k`, or `fallback` if such a key does not exist. -/
-def getD [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (fallback : β k) : β k :=
-  match l with
+def getD [Ord α] [LawfulEqOrd α] (k : α) (t : Impl α β) (fallback : β k) : β k :=
+  match t with
   | .leaf => fallback
   | .inner _ k' v' l r =>
     match h : compare k k' with
@@ -114,8 +114,8 @@ def getD [Ord α] [LawfulEqOrd α] (k : α) (l : Impl α β) (fallback : β k) :
 namespace Const
 
 /-- Returns the value for the key `k`, or `none` if such a key does not exist. -/
-def Const.get? [Ord α] (k : α) (l : Impl α (fun _ => δ)) : Option δ :=
-  match l with
+def Const.get? [Ord α] (k : α) (t : Impl α (fun _ => δ)) : Option δ :=
+  match t with
   | .leaf => none
   | .inner _ k' v' l r =>
     match compare k k' with
@@ -124,8 +124,8 @@ def Const.get? [Ord α] (k : α) (l : Impl α (fun _ => δ)) : Option δ :=
     | .eq => some v'
 
 /-- Returns the value for the key `k`. -/
-def get [Ord α] (k : α) (l : Impl α (fun _ => δ)) (hlk : l.contains k = true) : δ :=
-  match l with
+def get [Ord α] (k : α) (t : Impl α (fun _ => δ)) (hlk : t.contains k = true) : δ :=
+  match t with
   | .inner _ k' v' l r =>
     match h : compare k k' with
     | .lt => get k l (by simpa [contains, h] using hlk)
@@ -133,8 +133,8 @@ def get [Ord α] (k : α) (l : Impl α (fun _ => δ)) (hlk : l.contains k = true
     | .eq => v'
 
 /-- Returns the value for the key `k`, or panics if such a key does not exist. -/
-def get! [Ord α] (k : α) (l : Impl α (fun _ => δ)) [Inhabited δ] : δ :=
-  match l with
+def get! [Ord α] (k : α) (t : Impl α (fun _ => δ)) [Inhabited δ] : δ :=
+  match t with
   | .leaf => panic! "Key is not present in map"
   | .inner _ k' v' l r =>
     match compare k k' with
@@ -143,8 +143,8 @@ def get! [Ord α] (k : α) (l : Impl α (fun _ => δ)) [Inhabited δ] : δ :=
     | .eq => v'
 
 /-- Returns the value for the key `k`, or `fallback` if such a key does not exist. -/
-def getD [Ord α] (k : α) (l : Impl α (fun _ => δ)) (fallback : δ) : δ :=
-  match l with
+def getD [Ord α] (k : α) (t : Impl α (fun _ => δ)) (fallback : δ) : δ :=
+  match t with
   | .leaf => fallback
   | .inner _ k' v' l r =>
     match compare k k' with
@@ -154,7 +154,7 @@ def getD [Ord α] (k : α) (l : Impl α (fun _ => δ)) (fallback : δ) : δ :=
 
 end Const
 
-/-- The smallest element of `l` that is not less than `k`. Also known as `lookupGE` or `ceil`. -/
+/-- The smallest element of `t` that is not less than `k`. Also known as `lookupGE` or `ceil`. -/
 @[inline]
 def lowerBound? [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
@@ -166,7 +166,7 @@ where
     | .eq => some ⟨ky, y⟩
     | .gt => go best r
 
-/-- The smallest element of `l` that is greater than `k`. Also known as `lookupGT` or `higher`. -/
+/-- The smallest element of `t` that is greater than `k`. Also known as `lookupGT` or `higher`. -/
 @[inline]
 def upperBound? [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
@@ -177,7 +177,7 @@ where
     | .lt => go (some ⟨ky, y⟩) l
     | _ => go best r
 
-/-- The largest element of `l` that is not greater than `k`. Also known as `floor`. -/
+/-- The largest element of `t` that is not greater than `k`. Also known as `floor`. -/
 @[inline]
 def lookupLE [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
@@ -189,7 +189,7 @@ where
     | .eq => some ⟨ky, y⟩
     | .gt => go (some ⟨ky, y⟩) r
 
-/-- The largest element of `l` that is less than `k`. Also known as `lower`. -/
+/-- The largest element of `t` that is less than `k`. Also known as `lower`. -/
 @[inline]
 def lookupLT [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
@@ -200,19 +200,19 @@ where
     | .gt => go (some ⟨ky, y⟩) r
     | _ => go best l
 
-/-- The smallest element of `l`. -/
+/-- The smallest element of `t`. -/
 def min? [Ord α] : Impl α β → Option ((a : α) × β a)
   | .leaf => none
   | .inner _ k v .leaf _ => some ⟨k, v⟩
   | .inner _ _ _ l@(.inner _ _ _ _ _) _ => l.min?
 
-/-- The largest element of `l`. -/
+/-- The largest element of `t`. -/
 def max? [Ord α] : Impl α β → Option ((a : α) × β a)
   | .leaf => none
   | .inner _ k v _ .leaf => some ⟨k, v⟩
   | .inner _ _ _ _ r@(.inner _ _ _ _ _) => r.max?
 
-/-- Returns the mapping with the `n`-th smallest key, or `none` if `n` is at least `l.size`. -/
+/-- Returns the mapping with the `n`-th smallest key, or `none` if `n` is at least `t.size`. -/
 def atIndex? [Ord α] : Impl α β → Nat → Option ((a : α) × β a)
   | .leaf, _ => none
   | .inner _ k v l r, n =>
@@ -221,7 +221,7 @@ def atIndex? [Ord α] : Impl α β → Nat → Option ((a : α) × β a)
     | .eq => some ⟨k, v⟩
     | .gt => r.atIndex? (n - l.size - 1)
 
-/-- Returns the mapping with the `n`-th smallest key, or panics if `n` is at least `l.size`. -/
+/-- Returns the mapping with the `n`-th smallest key, or panics if `n` is at least `t.size`. -/
 def atIndex! [Ord α] [Inhabited ((a : α) × β a)] : Impl α β → Nat → (a : α) × β a
   | .leaf, _ => panic! "Out-of-bounds access"
   | .inner _ k v l r, n =>
@@ -230,7 +230,7 @@ def atIndex! [Ord α] [Inhabited ((a : α) × β a)] : Impl α β → Nat → (a
     | .eq => ⟨k, v⟩
     | .gt => r.atIndex! (n - l.size - 1)
 
-/-- Returns the mapping with the `n`-th smallest key, or `fallback` if `n` is at least `l.size`. -/
+/-- Returns the mapping with the `n`-th smallest key, or `fallback` if `n` is at least `t.size`. -/
 def atIndexD [Ord α] : Impl α β → Nat → (a : α) × β a → (a : α) × β a
   | .leaf, _, fallback => fallback
   | .inner _ k v l r, n, fallback =>
@@ -716,7 +716,7 @@ def doubleR (k : α) (v : β k) (lk : α) (lv : β lk) (ll : Impl α β) (lrk : 
     (lrl lrr : Impl α β) (r : Impl α β) : Impl α β :=
   bin lrk lrv (bin lk lv ll lrl) (bin k v lrr r)
 
-theorem Balanced.map {l₁ l₂ : Impl α β} : l₁.Balanced → l₁ = l₂ → l₂.Balanced
+theorem Balanced.map {t₁ t₂ : Impl α β} : t₁.Balanced → t₁ = t₂ → t₂.Balanced
   | h, rfl => h
 
 attribute [tree_tac] and_true true_and
@@ -1222,8 +1222,8 @@ def glueSlow (l r : Impl α β) : Impl α β :=
 -/
 
 /-- Inserts an element at the beginning of the tree. -/
-def insertMin (k : α) (v : β k) (r : Impl α β) (hr : r.Balanced) : Tree α β (1 + r.size) :=
-  match r with
+def insertMin (k : α) (v : β k) (t : Impl α β) (hr : t.Balanced) : Tree α β (1 + t.size) :=
+  match t with
   | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
   | inner sz k' v' l' r' =>
       let ⟨l'', hl''₁, hl''₂⟩ := insertMin k v l' ✓
@@ -1231,14 +1231,14 @@ def insertMin (k : α) (v : β k) (r : Impl α β) (hr : r.Balanced) : Tree α �
 
 /-- Slower version of `insertMin` which can be used in the absence of balance information but
 still assumes the preconditions of `insertMin`, otherwise might panic. -/
-def insertMinSlow (k : α) (v : β k) (r : Impl α β) : Impl α β :=
-  match r with
+def insertMinSlow (k : α) (v : β k) (t : Impl α β) : Impl α β :=
+  match t with
   | leaf => .inner 1 k v .leaf .leaf
   | inner _ k' v' l' r' => balanceLSlow k' v' (insertMinSlow k v l') r'
 
 /-- Inserts an element at the end of the tree. -/
-def insertMax (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) : Tree α β (l.size + 1) :=
-  match l with
+def insertMax (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) : Tree α β (t.size + 1) :=
+  match t with
   | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓⟩
   | inner sz k' v' l' r' =>
       let ⟨r'', hr''₁, hr''₂⟩ := insertMax k v r' ✓
@@ -1246,8 +1246,8 @@ def insertMax (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) : Tree α �
 
 /-- Slower version of `insertMax` which can be used in the absence of balance information but
 still assumes the preconditions of `insertMax`, otherwise might panic. -/
-def insertMaxSlow (k : α) (v : β k) (l : Impl α β) : Impl α β :=
-  match l with
+def insertMaxSlow (k : α) (v : β k) (t : Impl α β) : Impl α β :=
+  match t with
   | leaf => .inner 1 k v .leaf .leaf
   | inner _ k' v' l' r' => balanceRSlow k' v' l' (insertMaxSlow k v r')
 
@@ -1368,9 +1368,9 @@ theorem balanced_empty : (empty : Impl α β).Balanced :=
 attribute [tree_tac] or_true true_or
 
 /-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
-def insert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    TreeB α β l.size (l.size + 1) :=
-  match l with
+def insert [Ord α] (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) :
+    TreeB α β t.size (t.size + 1) :=
+  match t with
   | leaf => ⟨.inner 1 k v .leaf .leaf, ✓, ✓, ✓⟩
   | inner sz k' v' l' r' =>
       match compare k k' with
@@ -1384,8 +1384,8 @@ def insert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
 
 /-- Slower version of `insert` which can be used in the absence of balance information but
 still assumes the preconditions of `insert`, otherwise might panic. -/
-def insertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) : Impl α β :=
-  match l with
+def insertSlow [Ord α] (k : α) (v : β k) (t : Impl α β) : Impl α β :=
+  match t with
   | leaf => .inner 1 k v .leaf .leaf
   | inner sz k' v' l r =>
       match compare k k' with
@@ -1393,12 +1393,12 @@ def insertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) : Impl α β :=
       | .gt => balanceRSlow k' v' l (insertSlow k v r)
       | .eq => .inner sz k v l r
 
-/-- Returns the pair `(l.contains k, l.insert k v)`. -/
+/-- Returns the pair `(t.contains k, t.insert k v)`. -/
 @[inline]
-def containsThenInsert [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × TreeB α β l.size (l.size + 1) :=
-  let sz := size l
-  let m := l.insert k v hl
+def containsThenInsert [Ord α] (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) :
+    Bool × TreeB α β t.size (t.size + 1) :=
+  let sz := size t
+  let m := t.insert k v hl
   (sz == m.1.size, m)
 where -- workaround for https://github.com/leanprover/lean4/issues/6058
   size : Impl α β → Nat
@@ -1408,10 +1408,10 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
 /-- Slower version of `containsThenInsert` which can be used in the absence of balance
 information but still assumes the preconditions of `containsThenInsert`, otherwise might panic. -/
 @[inline]
-def containsThenInsertSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+def containsThenInsertSlow [Ord α] (k : α) (v : β k) (t : Impl α β) :
     Bool × Impl α β :=
-  let sz := size l
-  let m := l.insertSlow k v
+  let sz := size t
+  let m := t.insertSlow k v
   (sz == m.size, m)
 where -- workaround for https://github.com/leanprover/lean4/issues/6058
   size : Impl α β → Nat
@@ -1420,71 +1420,71 @@ where -- workaround for https://github.com/leanprover/lean4/issues/6058
 
 /-- Adds a new mapping to the key, overwriting an existing one with equal key if present. -/
 @[inline]
-def insertIfNew [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    TreeB α β l.size (l.size + 1) :=
-  if l.contains k then ⟨l, ✓, ✓, ✓⟩ else l.insert k v ✓
+def insertIfNew [Ord α] (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) :
+    TreeB α β t.size (t.size + 1) :=
+  if t.contains k then ⟨t, ✓, ✓, ✓⟩ else t.insert k v ✓
 
 /-- Slower version of `insertIfNew` which can be used in the absence of balance
 information but still assumes the preconditions of `insertIfNew`, otherwise might panic. -/
 @[inline]
-def insertIfNewSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+def insertIfNewSlow [Ord α] (k : α) (v : β k) (t : Impl α β) :
     Impl α β :=
-  if l.contains k then l else l.insertSlow k v
+  if t.contains k then t else t.insertSlow k v
 
-/-- Returns the pair `(l.contains k, l.insertIfNew k v)`. -/
+/-- Returns the pair `(t.contains k, t.insertIfNew k v)`. -/
 @[inline]
-def containsThenInsertIfNew [Ord α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
-    Bool × TreeB α β l.size (l.size + 1) :=
-  if l.contains k then (true, ⟨l, ✓, ✓, ✓⟩) else (false, l.insert k v ✓)
+def containsThenInsertIfNew [Ord α] (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) :
+    Bool × TreeB α β t.size (t.size + 1) :=
+  if t.contains k then (true, ⟨t, ✓, ✓, ✓⟩) else (false, t.insert k v ✓)
 
 /-- Slower version of `containsThenInsertIfNew` which can be used in the absence of balance
 information but still assumes the preconditions of `containsThenInsertIfNew`, otherwise might panic. -/
 @[inline]
-def containsThenInsertIfNewSlow [Ord α] (k : α) (v : β k) (l : Impl α β) :
+def containsThenInsertIfNewSlow [Ord α] (k : α) (v : β k) (t : Impl α β) :
     Bool × Impl α β :=
-  if l.contains k then (true, l) else (false, l.insertSlow k v)
+  if t.contains k then (true, t) else (false, t.insertSlow k v)
 
-/-- Returns the pair `(l.get? k, l.insertIfNew k v)`. -/
+/-- Returns the pair `(t.get? k, t.insertIfNew k v)`. -/
 @[inline]
-def getThenInsertIfNew? [Ord α] [LawfulEqOrd α] (k : α) (v : β k) (l : Impl α β) (hl : l.Balanced) :
+def getThenInsertIfNew? [Ord α] [LawfulEqOrd α] (k : α) (v : β k) (t : Impl α β) (hl : t.Balanced) :
     Option (β k) × Impl α β :=
-  match l.get? k with
-  | some v' => (some v', l)
-  | none => (none, (l.insertIfNew k v hl).impl)
+  match t.get? k with
+  | some v' => (some v', t)
+  | none => (none, (t.insertIfNew k v hl).impl)
 
 /-- Slower version of `getThenInsertIfNew?` which can be used in the absence of balance
 information but still assumes the preconditions of `getThenInsertIfNew?`, otherwise might panic. -/
 @[inline]
-def getThenInsertIfNewSlow? [Ord α] [LawfulEqOrd α] (k : α) (v : β k) (l : Impl α β) :
+def getThenInsertIfNewSlow? [Ord α] [LawfulEqOrd α] (k : α) (v : β k) (t : Impl α β) :
     Option (β k) × Impl α β :=
-  match l.get? k with
-  | some v' => (some v', l)
-  | none => (none, l.insertIfNewSlow k v)
+  match t.get? k with
+  | some v' => (some v', t)
+  | none => (none, t.insertIfNewSlow k v)
 
 namespace Const
 
-/-- Returns the pair `(l.get? k, l.insertIfNew k v)`. -/
+/-- Returns the pair `(t.get? k, t.insertIfNew k v)`. -/
 @[inline]
-def getThenInsertIfNew? [Ord α] (k : α) (v : δ) (l : Impl α (fun _ => δ)) (hl : l.Balanced) :
+def getThenInsertIfNew? [Ord α] (k : α) (v : δ) (t : Impl α (fun _ => δ)) (hl : t.Balanced) :
     Option δ × Impl α (fun _ => δ) :=
-  match Const.get? k l with
-  | some v' => (some v', l)
-  | none => (none, (l.insertIfNew k v hl).impl)
+  match Const.get? k t with
+  | some v' => (some v', t)
+  | none => (none, (t.insertIfNew k v hl).impl)
 
 /-- Slower version of `getThenInsertIfNew?` which can be used in the absence of balance
 information but still assumes the preconditions of `getThenInsertIfNew?`, otherwise might panic. -/
 @[inline]
-def getThenInsertIfNewSlow? [Ord α] (k : α) (v : δ) (l : Impl α (fun _ => δ)) :
+def getThenInsertIfNewSlow? [Ord α] (k : α) (v : δ) (t : Impl α (fun _ => δ)) :
     Option δ × Impl α (fun _ => δ) :=
-  match Const.get? k l with
-  | some v' => (some v', l)
-  | none => (none, l.insertIfNewSlow k v)
+  match Const.get? k t with
+  | some v' => (some v', t)
+  | none => (none, t.insertIfNewSlow k v)
 
 end Const
 
 /-- Removes the mapping with key `k`, if it exists. -/
-def erase [Ord α] (l : Impl α β) (k : α) (h : l.Balanced) : TreeB α β (l.size - 1) l.size :=
-  match l with
+def erase [Ord α] (t : Impl α β) (k : α) (h : t.Balanced) : TreeB α β (t.size - 1) t.size :=
+  match t with
   | leaf => ⟨.leaf, ✓, ✓, ✓⟩
   | inner sz k' v' l r =>
     match compare k k' with
@@ -1498,8 +1498,8 @@ def erase [Ord α] (l : Impl α β) (k : α) (h : l.Balanced) : TreeB α β (l.s
 
 /-- Slower version of `erase` which can be used in the absence of balance
 information but still assumes the preconditions of `erase`, otherwise might panic. -/
-def eraseSlow [Ord α] (l : Impl α β) (k : α) : Impl α β :=
-  match l with
+def eraseSlow [Ord α] (t : Impl α β) (k : α) : Impl α β :=
+  match t with
   | leaf => .leaf
   | inner _ k' v' l r =>
     match compare k k' with
@@ -1520,9 +1520,9 @@ attribute [tree_tac] BImpl.balanced_impl
 /-- Returns the tree consisting of the mappings `(k, (f k v).get)` where `(k, v)` was a mapping in
 the original tree and `(f k v).isSome`. -/
 @[specialize]
-def filterMap [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl α β) (hl : l.Balanced) :
+def filterMap [Ord α] (f : (a : α) → β a → Option (γ a)) (t : Impl α β) (hl : t.Balanced) :
     BImpl α γ :=
-  match l with
+  match t with
   | .leaf => ⟨.leaf, ✓⟩
   | .inner sz k v l r =>
     match f k v with
@@ -1538,8 +1538,8 @@ def filterMap [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl α β
 /-- Slower version of `filterMap` which can be used in the absence of balance
 information but still assumes the preconditions of `filterMap`, otherwise might panic. -/
 @[specialize]
-def filterMapSlow [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl α β) : Impl α γ :=
-  match l with
+def filterMapSlow [Ord α] (f : (a : α) → β a → Option (γ a)) (t : Impl α β) : Impl α γ :=
+  match t with
   | .leaf => .leaf
   | .inner _ k v l r =>
     match f k v with
@@ -1549,16 +1549,16 @@ def filterMapSlow [Ord α] (f : (a : α) → β a → Option (γ a)) (l : Impl �
 /-- Returns the tree consisting of the mappings `(k, f k v)` where `(k, v)` was a mapping in the
 original tree. -/
 @[specialize]
-def map [Ord α] (f : (a : α) → β a → γ a) (l : Impl α β) : Impl α γ :=
-  match l with
+def map [Ord α] (f : (a : α) → β a → γ a) (t : Impl α β) : Impl α γ :=
+  match t with
   | .leaf => .leaf
   | .inner sz k v l r => .inner sz k (f k v) (map f l) (map f r)
 
 /-- Returns the tree consisting of the mapping `(k, v)` where `(k, v)` was a mapping in the
 original tree and `f k v = true`. -/
 @[specialize]
-def filter [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) (hl : Balanced l) : BImpl α β :=
-  match l with
+def filter [Ord α] (f : (a : α) → β a → Bool) (t : Impl α β) (hl : Balanced t) : BImpl α β :=
+  match t with
   | .leaf => ⟨.leaf, ✓⟩
   | .inner sz k v l r =>
     match f k v with
@@ -1574,8 +1574,8 @@ def filter [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) (hl : Bala
 /-- Slower version of `filter` which can be used in the absence of balance
 information but still assumes the preconditions of `filter`, otherwise might panic. -/
 @[specialize]
-def filterSlow [Ord α] (f : (a : α) → β a → Bool) (l : Impl α β) : Impl α β :=
-  match l with
+def filterSlow [Ord α] (f : (a : α) → β a → Bool) (t : Impl α β) : Impl α β :=
+  match t with
   | .leaf => .leaf
   | .inner _ k v l r =>
     match f k v with
@@ -1589,9 +1589,9 @@ namespace Const
 /-- Changes the mapping of the key `k` by applying the function `f` to the current mapped value
 (if any). This function can be used to insert a new mapping, modify an existing one or delete it. -/
 @[specialize]
-def alter [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ => δ)) (hl : l.Balanced) :
-    TreeB α (fun _ => δ) (l.size - 1) (l.size + 1) :=
-  match l with
+def alter [Ord α] (k : α) (f : Option δ → Option δ) (t : Impl α (fun _ => δ)) (hl : t.Balanced) :
+    TreeB α (fun _ => δ) (t.size - 1) (t.size + 1) :=
+  match t with
   | .leaf =>
     match f none with
     | none => ⟨.leaf, ✓, ✓, ✓⟩
@@ -1612,9 +1612,9 @@ def alter [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ =>
 /-- Slower version of `modify` which can be used in the absence of balance
 information but still assumes the preconditions of `modify`, otherwise might panic. -/
 @[specialize]
-def alterSlow [Ord α] (k : α) (f : Option δ → Option δ) (l : Impl α (fun _ => δ)) :
+def alterSlow [Ord α] (k : α) (f : Option δ → Option δ) (t : Impl α (fun _ => δ)) :
     Impl α (fun _ => δ) :=
-  match l with
+  match t with
   | .leaf =>
     match f none with
     | none => .leaf
@@ -1635,9 +1635,9 @@ end Const
 This version of the function requires `LawfulEqOrd α`. There is an alternative non-dependent version
 called `Const.modify`. -/
 @[specialize]
-def alter [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (l : Impl α β)
-    (hl : l.Balanced) : TreeB α β (l.size - 1) (l.size + 1) :=
-  match l with
+def alter [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (t : Impl α β)
+    (hl : t.Balanced) : TreeB α β (t.size - 1) (t.size + 1) :=
+  match t with
   | .leaf =>
     match f none with
     | none => ⟨.leaf, ✓, ✓, ✓⟩
@@ -1658,9 +1658,9 @@ def alter [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k
 /-- Slower version of `modify` which can be used in the absence of balance
 information but still assumes the preconditions of `modify`, otherwise might panic. -/
 @[specialize]
-def alterSlow [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (l : Impl α β) :
+def alterSlow [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (β k)) (t : Impl α β) :
     Impl α β :=
-  match l with
+  match t with
   | .leaf =>
     match f none with
     | none => .leaf
@@ -1678,9 +1678,9 @@ def alterSlow [Ord α] [LawfulEqOrd α] (k : α) (f : Option (β k) → Option (
 `(k', f k' v h)`, which `h : compare k k' = .eq`. If no such mapping is present, returns the
 tree unmodified. Note that this function is likely to be faster than `modify` because it never
 needs to rebalance the tree. -/
-def modify [Ord α] (k : α) (f : (k' : α) → β k' → (compare k k' = .eq) → β k') (l : Impl α β) :
+def modify [Ord α] (k : α) (f : (k' : α) → β k' → (compare k k' = .eq) → β k') (t : Impl α β) :
     Impl α β :=
-  match l with
+  match t with
   | .leaf => .leaf
   | .inner sz k' v' l r =>
     match h : compare k k' with
@@ -1691,7 +1691,7 @@ def modify [Ord α] (k : α) (f : (k' : α) → β k' → (compare k k' = .eq) �
 attribute [tree_tac] Nat.compare_eq_gt Nat.compare_eq_lt Nat.compare_eq_eq
 
 /-- Returns the mapping with the `n`-th smallest key. -/
-def atIndex [Ord α] : (l : Impl α β) → (hl : l.Balanced) → (n : Nat) → (h : n < l.size) → (a : α) × β a
+def atIndex [Ord α] : (t : Impl α β) → (hl : t.Balanced) → (n : Nat) → (h : n < t.size) → (a : α) × β a
   | .inner _ k v l' r', hl, n, h =>
     match h : compare n l'.size with
     | .lt => l'.atIndex hl.left n ✓
@@ -1709,13 +1709,13 @@ def foldlM [Monad m] (f : δ → (a : α) → β a → m δ) (init : δ) : Impl 
 
 /-- Folds the given function over the mappings in the tree in ascending order. -/
 @[inline]
-def foldl (f : δ → (a : α) → β a → δ) (init : δ) (l : Impl α β) : δ :=
-  Id.run (l.foldlM f init)
+def foldl (f : δ → (a : α) → β a → δ) (init : δ) (t : Impl α β) : δ :=
+  Id.run (t.foldlM f init)
 
 /-- Applies the given function to the mappings in the tree in ascending order. -/
 @[inline]
-def forM [Monad m] (f : (a : α) → β a → m PUnit) (l : Impl α β) : m PUnit :=
-  l.foldlM (fun _ k v => f k v) ⟨⟩
+def forM [Monad m] (f : (a : α) → β a → m PUnit) (t : Impl α β) : m PUnit :=
+  t.foldlM (fun _ k v => f k v) ⟨⟩
 
 /-- Implementation detail. -/
 @[specialize]
@@ -1732,8 +1732,8 @@ def forInStep [Monad m] (f : δ → (a : α) → β a → m (ForInStep δ)) (ini
 
 /-- Support for the `for` construct in `do` blocks. -/
 @[inline]
-def forIn [Monad m] (f : δ → (a : α) → β a → m (ForInStep δ)) (init : δ) (l : Impl α β) : m δ := do
-  match ← forInStep f init l with
+def forIn [Monad m] (f : δ → (a : α) → β a → m (ForInStep δ)) (init : δ) (t : Impl α β) : m δ := do
+  match ← forInStep f init t with
   | ForInStep.done d => return d
   | ForInStep.yield d => return d
 
@@ -1744,23 +1744,23 @@ def toListModel : Impl α β → List ((a : α) × β a)
   | .inner _ k v l r => l.toListModel ++ ⟨k, v⟩ :: r.toListModel
 
 /-- The binary search tree property. -/
-def Ordered [Ord α] (l : Impl α β) : Prop :=
-  l.toListModel.Pairwise (fun a b => compare a.1 b.1 = .lt)
+def Ordered [Ord α] (t : Impl α β) : Prop :=
+  t.toListModel.Pairwise (fun a b => compare a.1 b.1 = .lt)
 
 /-- Well-formedness of ordered trees. -/
 inductive WF [Ord α] : Impl α β → Prop where
   /-- This is the actual well-formedness invariant: the tree must be a balanced BST. -/
-  | wf {l} : Balanced l → (∀ [TransOrd α], Ordered l) → WF l
+  | wf {t} : Balanced t → (∀ [TransOrd α], Ordered t) → WF t
   /-- The empty tree is well-formed. Later shown to be subsumed by `.wf`. -/
   | empty : WF .empty
   /-- `insert` preserves well-formedness. Later shown to be subsumed by `.wf`. -/
-  | insert {l h k v} : WF l → WF (l.insert k v h).impl
+  | insert {t h k v} : WF t → WF (t.insert k v h).impl
 
 set_option debug.byAsSorry false
 
 /-- A well-formed tree is balanced. This is needed here already because we need to know that the
 tree is balanced to call the optimized modification functions. -/
-theorem WF.balanced [Ord α] {l : Impl α β} : WF l → l.Balanced
+theorem WF.balanced [Ord α] {t : Impl α β} : WF t → t.Balanced
   | .wf h _ => h
   | .empty => balanced_empty
   | .insert _ => TreeB.balanced_impl _

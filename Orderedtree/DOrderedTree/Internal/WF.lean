@@ -523,6 +523,13 @@ theorem Option.head?_toList {o : Option α} : o.toList.head? = o := by
   cases o <;> simp
 
 /-!
+### `isEmpty`
+-/
+
+theorem isEmpty_eq_isEmpty (m : Impl α β) : m.isEmpty = m.toListModel.isEmpty := by
+  induction m <;> simp [Impl.isEmpty]
+
+/-!
 ### `lowerBound`
 -/
 

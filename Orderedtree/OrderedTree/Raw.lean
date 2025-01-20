@@ -32,6 +32,10 @@ structure WF (l : Raw α β cmp) where
 def empty : Raw α β cmp :=
   ⟨DOrderedTree.Raw.empty⟩
 
+@[inline, inherit_doc DOrderedTree.Raw.isEmpty]
+def isEmpty (t : Raw α β cmp) : Bool :=
+  t.inner.isEmpty
+
 @[inline, inherit_doc DOrderedTree.Raw.insert]
 def insert (l : Raw α β cmp) (a : α) (b : β) : Raw α β cmp :=
   ⟨l.inner.insert a b⟩

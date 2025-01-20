@@ -64,6 +64,9 @@ macro_rules
 attribute [local instance] beqOfOrd
 attribute [local instance] equivBEq_of_transOrd
 
+theorem isEmpty_empty : isEmpty (empty : Impl α β) := by
+  simp [Impl.isEmpty_eq_isEmpty]
+
 theorem contains_insert [Ord α] [TransOrd α] (m : Impl α β) (h : m.WF) {k a : α} {v : β k} :
     (m.insert k v h.balanced).impl.contains a = (compare k a == .eq || m.contains a) := by
   simp_to_model using List.containsKey_insertEntry

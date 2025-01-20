@@ -31,6 +31,10 @@ def empty : Raw α cmp :=
   ⟨OrderedTree.Raw.empty⟩
 
 @[inline]
+def isEmpty (t : Raw α cmp) : Bool :=
+  t.inner.isEmpty
+
+@[inline]
 def insert (l : Raw α cmp) (a : α) : Raw α cmp :=
   ⟨l.inner.insert a ()⟩
 

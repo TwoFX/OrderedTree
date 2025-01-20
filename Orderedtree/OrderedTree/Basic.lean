@@ -25,6 +25,10 @@ namespace OrderedTree
 def empty : OrderedTree α β cmp :=
   ⟨DOrderedTree.empty⟩
 
+@[inline, inherit_doc DOrderedTree.isEmpty]
+def isEmpty (t : OrderedTree α β cmp) : Bool :=
+  t.inner.isEmpty
+
 @[inline, inherit_doc DOrderedTree.insert]
 def insert (l : OrderedTree α β cmp) (a : α) (b : β) : OrderedTree α β cmp :=
   ⟨l.inner.insert a b⟩

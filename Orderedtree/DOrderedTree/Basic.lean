@@ -23,6 +23,10 @@ structure DOrderedTree (α : Type u) (β : α → Type v) (cmp : α → α → O
 
 namespace DOrderedTree
 
+@[inline]
+def isEmpty (t : DOrderedTree α β cmp) : Bool :=
+  t.inner.isEmpty
+
 /-- Creates a new empty binary search tree. -/
 @[inline]
 def empty : DOrderedTree α β cmp :=
