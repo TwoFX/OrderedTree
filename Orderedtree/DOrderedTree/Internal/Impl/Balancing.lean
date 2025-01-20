@@ -5,6 +5,7 @@ Authors: Markus Himmel
 -/
 import Orderedtree.Classes.LawfulEqOrd
 import Orderedtree.DOrderedTree.Internal.Impl.Attr
+import Orderedtree.DOrderedTree.Internal.Impl.Query
 import Orderedtree.Classes.TransOrd
 import Lean.Elab.Tactic
 
@@ -21,7 +22,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w} {m : Type w → Type w}
 
-namespace Std.DOrderedTree.Internal
+namespace Std.DOrderedTree.Internal.Impl
 
 /-- Predicate for local balance at a node of the tree. We don't provide API for this, preferring
 instead to use automation to dispatch goals about balance. -/
@@ -486,3 +487,375 @@ def doubleL (k : α) (v : β k) (l : Impl α β) (rk : α) (rv : β rk) (rlk : �
 def doubleR (k : α) (v : β k) (lk : α) (lv : β lk) (ll : Impl α β) (lrk : α) (lrv : β lrk)
     (lrl lrr : Impl α β) (r : Impl α β) : Impl α β :=
   bin lrk lrv (bin lk lv ll lrl) (bin k v lrr r)
+
+
+theorem Balanced.map {t₁ t₂ : Impl α β} : t₁.Balanced → t₁ = t₂ → t₂.Balanced
+  | h, rfl => h
+
+attribute [tree_tac] and_true true_and
+
+theorem balanced_singleL (k v l rs rk rv rl rr) (hl : l.Balanced)
+    (hr : (Impl.inner rs rk rv rl rr).Balanced)
+    (hlr : BalanceLErasePrecond l.size rs ∨ BalanceLErasePrecond rs l.size)
+    (hh : rs > delta * l.size)
+    (hx : rl.size < ratio * rr.size) :
+    (singleL k v l rk rv rl rr : Impl α β).Balanced := by
+  tree_tac
+
+theorem balanced_singleR (k v ls lk lv ll lr r) (hl : (Impl.inner ls lk lv ll lr).Balanced)
+    (hr : r.Balanced) (hlr : BalanceLErasePrecond ls r.size ∨ BalanceLErasePrecond r.size ls)
+    (hh : ls > delta * r.size)
+    (hx : lr.size < ratio * ll.size) :
+    (singleR k v lk lv ll lr r : Impl α β).Balanced := by
+  tree_tac
+
+theorem balanced_doubleL (k v l rs rk rv rls rlk rlv rll rlr) (rr : Impl α β) (hl : l.Balanced)
+    (hr : (Impl.inner rs rk rv (Impl.inner rls rlk rlv rll rlr) rr).Balanced)
+    (hlr : BalanceLErasePrecond l.size rs ∨ BalanceLErasePrecond rs l.size)
+    (hh : rs > delta * l.size) (hx : ¬rls < ratio * rr.size) :
+    (doubleL k v l rk rv rlk rlv rll rlr rr).Balanced := by
+  tree_tac
+
+theorem balanced_doubleR (k v ls lk lv ll lrs lrk lrv lrl lrr) (r : Impl α β)
+    (hl : (Impl.inner ls lk lv ll (Impl.inner lrs lrk lrv lrl lrr)).Balanced) (hr : r.Balanced)
+    (hlr : BalanceLErasePrecond ls r.size ∨ BalanceLErasePrecond r.size ls)
+    (hh : ls > delta * r.size) (hx : ¬lrs < ratio * ll.size) :
+    (doubleR k v lk lv ll lrk lrv lrl lrr r).Balanced := by
+  tree_tac
+
+theorem balanceSlow_desc {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size ∨ BalanceLErasePrecond r.size l.size) :
+    (balanceSlow k v l r).size = l.size + 1 + r.size ∧ (balanceSlow k v l r).Balanced := by
+  cases k, v, l, r using balanceSlow.fun_cases
+  all_goals
+    simp only [balanceSlow, *, if_true, if_false, true_and, size_inner, size_leaf,
+      balanced_one_leaf_leaf]
+
+  -- Group 1: l = leaf
+  · rename_i sz k' v'
+    obtain rfl : sz = 1 := by tree_tac
+    simp only [Nat.zero_add, Nat.reduceAdd, true_and]
+    exact balanced_inner_iff.2 ⟨.leaf, balanced_one_leaf_leaf, by simp [size_leaf, size_inner],
+      by simp only [tree_tac]⟩
+  · rename_i sz sz' rk k' rv v' l r
+    rw [balanced_inner_iff] at hrb
+    simp only [size_leaf, size_inner, balancedAtRoot_zero_iff] at hrb
+    obtain rfl : sz' = 1 := Nat.le_antisymm hrb.2.2.1 hrb.2.1.one_le
+    obtain rfl : sz = 2 := by simp [hrb.2.2]
+    simp only [Nat.zero_add, Nat.reduceAdd, true_and]
+    exact balanced_inner_iff.2 ⟨balanced_one_leaf_leaf, hrb.2.1, by simp [size_inner],
+      by simp [size_inner]⟩
+  · rename_i sz sz' rk k' rv v' l r
+    rw [balanced_inner_iff] at hrb
+    simp only [size_leaf, size_inner, balancedAtRoot_zero_iff'] at hrb
+    obtain rfl : sz' = 1 := Nat.le_antisymm hrb.2.2.1 hrb.1.one_le
+    obtain rfl : sz = 2 := by simp [hrb.2.2]
+    simp only [Nat.zero_add, Nat.reduceAdd, true_and]
+    exact balanced_inner_iff.2 ⟨balanced_one_leaf_leaf, balanced_one_leaf_leaf, by simp [size_inner],
+      by simp [size_inner]⟩
+  · rw [balanced_inner_iff, size_inner, size_inner] at hrb
+    obtain rfl := hrb.2.2.2
+    simp only [size_inner, size_leaf, balanceLErasePrecond_zero_iff, balanceLErasePrecond_zero_iff'] at hlr ⊢
+    rw [or_iff_right_of_imp (fun h => Nat.le_trans h (by decide))] at hlr
+    simp only [ratio] at *
+    rename_i rls rrs _ _ _ _ _ _ _ _ _ _
+    obtain ⟨rfl, rfl⟩ : rls = 1 ∧ rrs = 1 := omega_fact_1 hlr hrb.1.one_le hrb.2.1.one_le
+    refine balanced_inner_iff.2 ⟨?_, hrb.2.1, by simp [size_inner], by simp [size_inner, Nat.add_assoc]⟩
+    refine balanced_inner_iff.2 ⟨.leaf, hrb.1, ?_, by simp [size_leaf, size_inner]⟩
+    simp [size_leaf, size_inner]
+
+  -- Group 2: r = leaf
+  · rename_i sz k' v'
+    obtain rfl : sz = 1 := by tree_tac
+    simp only [Nat.reduceAdd, Nat.add_zero, true_and]
+    exact balanced_inner_iff.2 ⟨balanced_one_leaf_leaf, .leaf, by simp [size_leaf, size_inner],
+      by simp [size_leaf, size_inner]⟩
+  · rename_i sz sz' rk k' rv v' l r
+    rw [balanced_inner_iff] at hlb
+    simp only [size_leaf, size_inner, balancedAtRoot_zero_iff] at hlb
+    obtain rfl : sz' = 1 := Nat.le_antisymm hlb.2.2.1 hlb.2.1.one_le
+    obtain rfl : sz = 2 := by simp [hlb.2.2]
+    simp only [Nat.zero_add, Nat.reduceAdd, true_and]
+    exact balanced_inner_iff.2 ⟨balanced_one_leaf_leaf, balanced_one_leaf_leaf, by simp [size_inner],
+      by simp [size_inner]⟩
+  · rename_i sz sz' rk k' rv v' l r
+    rw [balanced_inner_iff] at hlb
+    simp only [size_leaf, size_inner, balancedAtRoot_zero_iff'] at hlb
+    obtain rfl : sz' = 1 := Nat.le_antisymm hlb.2.2.1 hlb.1.one_le
+    obtain rfl : sz = 2 := by simp [hlb.2.2]
+    simp only [Nat.zero_add, Nat.reduceAdd, true_and]
+    exact balanced_inner_iff.2 ⟨hlb.1, balanced_one_leaf_leaf, by simp [size_inner],
+      by simp [size_inner]⟩
+  · rw [balanced_inner_iff, size_inner, size_inner] at hlb
+    obtain rfl := hlb.2.2.2
+    simp only [size_inner, size_leaf, balanceLErasePrecond_zero_iff, balanceLErasePrecond_zero_iff'] at hlr ⊢
+    rw [or_iff_left_of_imp (fun h => Nat.le_trans h (by decide))] at hlr
+    simp only [ratio] at *
+    rename_i rls rrs _ _ _ _ _ _ _ _ _ _
+    obtain ⟨rfl, rfl⟩ : rls = 1 ∧ rrs = 1 := omega_fact_1 hlr hlb.1.one_le hlb.2.1.one_le
+    simp only [Nat.reduceAdd, Nat.add_zero, true_and]
+    refine balanced_inner_iff.2 ⟨hlb.1, ?_, by simp [size_inner], by simp [size_inner, Nat.add_assoc]⟩
+    refine balanced_inner_iff.2 ⟨hlb.2.1, .leaf, ?_, by simp [size_leaf, size_inner]⟩
+    simp [size_leaf, size_inner]
+
+  ·
+    refine ⟨by ac_rfl, ?_⟩
+    rename_i ls rs hlsrs rls rrs hrlsrrs _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    refine (balanced_singleL k v _ _ _ _ _ _ hlb hrb hlr hlsrs hrlsrrs).map ?_
+    simp only [singleL, bin]
+    congr 1
+    · simp only [size_inner, hrb.eq]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+
+  ·
+    refine ⟨by ac_rfl, ?_⟩
+    rename_i ls rs hlsrs rls rrs hrlsrrs _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    refine (balanced_doubleL k v _ _ _ _ _ _ _ _ _ _ hlb hrb hlr hlsrs hrlsrrs).map ?_
+    simp only [doubleL, bin]
+    congr 1
+    · simp only [size_inner, hrb.eq, hrb.left.eq]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+
+  · exfalso
+    rename_i ls rs h rls _ _ _ _ _ _ _ _ _ _
+    simp only [balanced_inner_iff, size_inner, size_leaf, balancedAtRoot_zero_iff'] at hrb
+    simp only [delta] at h
+    have := hlb.one_le
+    omega
+  · exfalso
+    rename_i ls rs h _ _ _ _ _ _ _
+    simp only [balanced_inner_iff, size_inner, size_leaf, balancedAtRoot_zero_iff] at hrb
+    simp only [delta] at h
+    have := hlb.one_le
+    omega
+  ·
+    refine ⟨by ac_rfl, ?_⟩
+    rename_i ls rs _ hlsrs lls lrs hllslrs _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    refine (balanced_singleR k v _ _ _ _ _ _ hlb hrb hlr hlsrs hllslrs).map ?_
+    simp only [singleR, bin]
+    congr 1
+    · simp only [size_inner, hlb.eq]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+  ·
+    refine ⟨by ac_rfl, ?_⟩
+    rename_i ls rs _ hlsrs lls lrs hllslrs _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    refine (balanced_doubleR k v _ _ _ _ _ _ _ _ _ _ hlb hrb hlr hlsrs hllslrs).map ?_
+    simp only [doubleR, bin]
+    congr 1
+    · simp only [size_inner, hlb.eq, hlb.right.eq]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+    · congr 1
+      simp only [size_inner]
+      ac_rfl
+  · exfalso
+    rename_i ls rs h rls _ _ _ _ _ _ _ _ _ _
+    simp only [balanced_inner_iff, size_inner, size_leaf, balancedAtRoot_zero_iff'] at hlb
+    simp only [delta] at h
+    have := hrb.one_le
+    omega
+  · exfalso
+    rename_i ls rs h _ _ _ _ _ _ _
+    simp only [balanced_inner_iff, size_inner, size_leaf, balancedAtRoot_zero_iff] at hlb
+    simp only [delta] at h
+    have := hrb.one_le
+    omega
+  · refine ⟨by ac_rfl, .inner hlb hrb (Or.inr ⟨?_, ?_⟩) (by simp only [size_inner]; ac_rfl)⟩
+    · rwa [size_inner, size_inner, ← Nat.not_lt]
+    · rwa [size_inner, size_inner, ← Nat.not_lt]
+
+theorem balanceL_eq_balanceLErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceL k v l r hlb hrb hlr = balanceLErase k v l r hlb hrb hlr.erase := by
+  rw [balanceL.eq_def, balanceLErase.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+    contradiction
+  · dsimp only
+    split
+    all_goals dsimp only
+    split
+    · split
+      · dsimp only
+      · contradiction
+      · contradiction
+    · rfl
+
+theorem balanceLErase_eq_balanceLSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceLErase k v l r hlb hrb hlr = balanceLSlow k v l r := by
+  rw [balanceLErase.eq_def, balanceLSlow.eq_def]
+  repeat' (split; dsimp)
+  all_goals try contradiction
+  all_goals simp_all [-Nat.not_lt]
+
+theorem balanceLSlow_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced)
+    (hrb : r.Balanced) (hlr : BalanceLErasePrecond l.size r.size) :
+    balanceLSlow k v l r = balanceSlow k v l r := by
+  cases k, v, l, r using balanceSlow.fun_cases
+  all_goals
+    simp only [balanceLSlow, balanceSlow, *, if_true, if_false, true_and, size_inner, size_leaf]
+  all_goals try rfl
+  all_goals try contradiction
+  all_goals try (exfalso; tree_tac; done)
+  all_goals congr; tree_tac
+
+theorem balanceR_eq_balanceRErase {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceR k v l r hlb hrb hlr = balanceRErase k v l r hlb hrb hlr.erase := by
+  rw [balanceR.eq_def, balanceRErase.eq_def]
+  split
+  · dsimp only
+    split
+    all_goals dsimp only
+    contradiction
+  · dsimp only
+    split
+    all_goals dsimp only
+    split
+    · split
+      · dsimp only
+      · contradiction
+      · contradiction
+    · rfl
+
+theorem balanceRErase_eq_balanceRSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balanceRErase k v l r hlb hrb hlr = balanceRSlow k v l r := by
+  rw [balanceRErase.eq_def, balanceRSlow.eq_def]
+  repeat' (split; dsimp)
+  all_goals try contradiction
+  all_goals simp_all [-Nat.not_lt]
+
+theorem balanceRSlow_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced)
+    (hrb : r.Balanced) (hlr : BalanceLErasePrecond r.size l.size) :
+    balanceRSlow k v l r = balanceSlow k v l r := by
+  cases k, v, l, r using balanceSlow.fun_cases
+  all_goals
+    simp only [balanceRSlow, balanceSlow, *, if_true, if_false, true_and, size_inner, size_leaf]
+  all_goals try rfl
+  all_goals try contradiction
+  all_goals try (exfalso; tree_tac; done)
+  all_goals congr; tree_tac
+
+theorem balance_eq_balanceSlow {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
+    balance k v l r hlb hrb hlr = balanceSlow k v l r := by
+  rw [balance.eq_def, balanceSlow.eq_def]
+  repeat' (split; dsimp)
+  all_goals try contradiction
+  all_goals simp_all [-Nat.not_lt]
+
+@[tree_tac]
+theorem size_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size ∨ BalanceLErasePrecond r.size l.size) :
+    (balanceSlow k v l r).size = l.size + 1 + r.size :=
+  (balanceSlow_desc hlb hrb hlr).1
+
+@[tree_tac]
+theorem balanced_balanceSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size ∨ BalanceLErasePrecond r.size l.size) :
+    (balanceSlow k v l r).Balanced :=
+  (balanceSlow_desc hlb hrb hlr).2
+
+@[tree_tac]
+theorem size_balance {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size ∨ BalanceLErasePrecond r.size l.size) :
+    (balance k v l r hlb hrb hlr).size = l.size + 1 + r.size := by
+  rw [balance_eq_balanceSlow, size_balanceSlow hlb hrb hlr]
+
+@[tree_tac]
+theorem balance_balance {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size ∨ BalanceLErasePrecond r.size l.size) :
+    (balance k v l r hlb hrb hlr).Balanced := by
+  rw [balance_eq_balanceSlow]
+  exact balanced_balanceSlow hlb hrb hlr
+
+@[tree_tac]
+theorem size_balanceLSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size) :
+    (balanceLSlow k v l r).size = l.size + 1 + r.size := by
+  rw [balanceLSlow_eq_balanceSlow hlb hrb hlr, size_balanceSlow hlb hrb (Or.inl hlr)]
+
+@[tree_tac]
+theorem balanced_balanceLSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size) :
+    (balanceLSlow k v l r).Balanced := by
+  rw [balanceLSlow_eq_balanceSlow hlb hrb hlr]
+  exact balanced_balanceSlow hlb hrb (Or.inl hlr)
+
+@[tree_tac]
+theorem size_balanceLErase {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size) :
+    (balanceLErase k v l r hlb hrb hlr).size = l.size + 1 + r.size := by
+  rw [balanceLErase_eq_balanceLSlow, size_balanceLSlow hlb hrb hlr]
+
+@[tree_tac]
+theorem balanced_balanceLErase {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond l.size r.size) :
+    (balanceLErase k v l r hlb hrb hlr).Balanced := by
+  rw [balanceLErase_eq_balanceLSlow]
+  exact balanced_balanceLSlow hlb hrb hlr
+
+@[tree_tac]
+theorem size_balanceL {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLPrecond l.size r.size) :
+    (balanceL k v l r hlb hrb hlr).size = l.size + 1 + r.size := by
+  rw [balanceL_eq_balanceLErase, size_balanceLErase]
+
+@[tree_tac]
+theorem balanced_balanceL {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLPrecond l.size r.size) :
+    (balanceL k v l r hlb hrb hlr).Balanced := by
+  rw [balanceL_eq_balanceLErase]
+  exact balanced_balanceLErase hlb hrb hlr.erase
+
+@[tree_tac]
+theorem size_balanceRSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond r.size l.size) :
+    (balanceRSlow k v l r).size = l.size + 1 + r.size := by
+  rw [balanceRSlow_eq_balanceSlow hlb hrb hlr, size_balanceSlow hlb hrb (Or.inr hlr)]
+
+@[tree_tac]
+theorem balanced_balanceRSlow {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond r.size l.size) :
+    (balanceRSlow k v l r).Balanced := by
+  rw [balanceRSlow_eq_balanceSlow hlb hrb hlr]
+  exact balanced_balanceSlow hlb hrb (Or.inr hlr)
+
+@[tree_tac]
+theorem size_balanceRErase {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond r.size l.size) :
+    (balanceRErase k v l r hlb hrb hlr).size = l.size + 1 + r.size := by
+  rw [balanceRErase_eq_balanceRSlow, size_balanceRSlow hlb hrb hlr]
+
+@[tree_tac]
+theorem balanced_balanceRErase {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLErasePrecond r.size l.size) :
+    (balanceRErase k v l r hlb hrb hlr).Balanced := by
+  rw [balanceRErase_eq_balanceRSlow]
+  exact balanced_balanceRSlow hlb hrb hlr
+
+@[tree_tac]
+theorem size_balanceR {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLPrecond r.size l.size) :
+    (balanceR k v l r hlb hrb hlr).size = l.size + 1 + r.size := by
+  rw [balanceR_eq_balanceRErase, size_balanceRErase]
+
+@[tree_tac]
+theorem balanced_balanceR {k : α} {v : β k} {l r : Impl α β} (hlb : l.Balanced) (hrb : r.Balanced)
+    (hlr : BalanceLPrecond r.size l.size) :
+    (balanceR k v l r hlb hrb hlr).Balanced := by
+  rw [balanceR_eq_balanceRErase]
+  exact balanced_balanceRErase hlb hrb hlr.erase
