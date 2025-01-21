@@ -3,7 +3,7 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.OrderedTree.Raw
+import Orderedtree.TreeMap.Raw
 
 set_option autoImplicit false
 set_option linter.missingDocs true
@@ -14,11 +14,11 @@ variable {α : Type u} {cmp : α → α → Ordering}
 
 namespace Std
 
-namespace OrderedSet
+namespace TreeSet
 
 structure Raw (α : Type u) (cmp : α → α → Ordering) where
   /-- Internal implementation detail of the binary search tree. -/
-  inner : OrderedTree.Raw α Unit cmp
+  inner : TreeMap.Raw α Unit cmp
 
 namespace Raw
 
@@ -31,7 +31,7 @@ instance {t : Raw α cmp} : Coe t.WF t.inner.WF where
 
 @[inline]
 def empty : Raw α cmp :=
-  ⟨OrderedTree.Raw.empty⟩
+  ⟨TreeMap.Raw.empty⟩
 
 @[inline]
 def isEmpty (t : Raw α cmp) : Bool :=
@@ -54,6 +54,6 @@ instance : Membership α (Raw α cmp) where
 
 end Raw
 
-end OrderedSet
+end TreeSet
 
 end Std

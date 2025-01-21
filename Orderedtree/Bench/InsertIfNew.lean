@@ -3,12 +3,12 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.Impl
+import Orderedtree.DTreeMap.Internal.Impl
 import Lean.Data.RBMap
 
 namespace Bench.InsertIfNew
 
-open Std.DOrderedTree.Internal Impl
+open Std.DTreeMap.Internal Impl
 
 partial def fisherYates (a : Array α) : Array α := Id.run do
   let mut res := a

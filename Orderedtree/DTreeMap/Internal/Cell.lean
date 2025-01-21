@@ -12,7 +12,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
-namespace Std.DOrderedTree.Internal
+namespace Std.DTreeMap.Internal
 
 /-- Type for representing the place in a binary search tree where a mapping for `k` could live. -/
 structure Cell (α : Type u) [Ord α] (β : α → Type v) (k : α → Ordering) where
@@ -79,4 +79,4 @@ theorem List.findCell_inner [Ord α] (l : List ((a : α) × β a)) (k : α → O
 
 @[simp] theorem List.findCell_nil [Ord α] (k : α → Ordering) : (findCell [] k : Cell α β k) = .empty := rfl
 
-end Std.DOrderedTree.Internal
+end Std.DTreeMap.Internal

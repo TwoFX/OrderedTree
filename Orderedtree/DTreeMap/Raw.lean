@@ -3,7 +3,7 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.Impl
+import Orderedtree.DTreeMap.Internal.Impl
 
 set_option autoImplicit false
 set_option linter.missingDocs true
@@ -14,7 +14,7 @@ variable {α : Type u} {β : α → Type v} {cmp : α → α → Ordering}
 
 namespace Std
 
-namespace DOrderedTree
+namespace DTreeMap
 
 /-- Binary search trees without a well-formedness invariant, suitable for use in nested inductive
 types. -/
@@ -61,6 +61,6 @@ instance : Membership α (Raw α β cmp) where
 
 end Raw
 
-end DOrderedTree
+end DTreeMap
 
 end Std

@@ -3,11 +3,11 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.WF
-import Orderedtree.DOrderedTree.Internal.Impl.Transform
+import Orderedtree.DTreeMap.Internal.WF
+import Orderedtree.DTreeMap.Internal.Impl.Transform
 
 /-!
-# API lemmas for `DOrderedTree.Impl`
+# API lemmas for `DTreeMap.Impl`
 -/
 
 set_option linter.missingDocs true
@@ -18,7 +18,7 @@ open Std.DHashMap.Internal.List
 
 universe u v
 
-namespace Std.DOrderedTree.Internal.Impl
+namespace Std.DTreeMap.Internal.Impl
 
 variable {α : Type u} {β : α → Type v} {_ : Ord α} {t : Impl α β}
 
@@ -92,7 +92,7 @@ theorem contains_insertSlow [TransOrd α] (h : t.WF) {k a : α} {v : β k} :
     (t.insertSlow k v).contains a = (compare k a == .eq || t.contains a) := by
   simp_to_model using List.containsKey_insertEntry
 
-end Std.DOrderedTree.Internal.Impl
+end Std.DTreeMap.Internal.Impl
 
 /-- Used as instance by the dependents of this file -/
 theorem TransOrd.ofTransCmp {α : Type u} {cmp : α → α → Ordering} [TransCmp cmp] :

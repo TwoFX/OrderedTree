@@ -3,27 +3,27 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.Lemmas
-import Orderedtree.DOrderedTree.Raw
+import Orderedtree.DTreeMap.Internal.Lemmas
+import Orderedtree.DTreeMap.Raw
 
 /-!
-# API lemmas for `DOrderedTree.Raw`
+# API lemmas for `DTreeMap.Raw`
 -/
 
 set_option linter.missingDocs true
 set_option autoImplicit false
 
-open Std.DOrderedTree.Internal
+open Std.DTreeMap.Internal
 
 universe u v
 
-namespace Std.DOrderedTree.Raw
+namespace Std.DTreeMap.Raw
 
 attribute [local instance] TransOrd.ofTransCmp
 
-variable {α : Type u} {β : α → Type v} {cmp : α → α → Ordering} {t : DOrderedTree.Raw α β cmp}
+variable {α : Type u} {β : α → Type v} {cmp : α → α → Ordering} {t : DTreeMap.Raw α β cmp}
 
-theorem isEmpty_empty : (empty : DOrderedTree.Raw α β cmp).isEmpty :=
+theorem isEmpty_empty : (empty : DTreeMap.Raw α β cmp).isEmpty :=
   Impl.isEmpty_empty
 
 theorem mem_iff_contains {k : α} : k ∈ t ↔ t.contains k :=
@@ -36,14 +36,14 @@ theorem contains_congr [TransCmp cmp] (h : t.WF) {k k' : α} (hab : cmp k k' == 
 theorem mem_congr [TransCmp cmp] (h : t.WF) {k k' : α} (hab : cmp k k' == .eq) : k ∈ t ↔ k' ∈ t :=
   Impl.mem_congr h hab
 
-theorem contains_empty {k : α} : (empty : DOrderedTree.Raw α β cmp).contains k = false :=
+theorem contains_empty {k : α} : (empty : DTreeMap.Raw α β cmp).contains k = false :=
   Impl.contains_empty
 
-theorem mem_empty {k : α} : k ∉ (empty : DOrderedTree.Raw α β cmp) :=
+theorem mem_empty {k : α} : k ∉ (empty : DTreeMap.Raw α β cmp) :=
   Impl.mem_empty
 
 theorem contains_insert [h : TransCmp cmp] (h : t.WF) {k a : α} {v : β k} :
     (t.insert k v).contains a = (cmp k a == .eq || t.contains a) :=
   Impl.contains_insertSlow h
 
-end Std.DOrderedTree.Raw
+end Std.DTreeMap.Raw

@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
 import Orderedtree.Classes.LawfulEqOrd
-import Orderedtree.DOrderedTree.Internal.Impl.Attr
-import Orderedtree.DOrderedTree.Internal.Impl.Query
+import Orderedtree.DTreeMap.Internal.Impl.Attr
+import Orderedtree.DTreeMap.Internal.Impl.Query
 import Orderedtree.Classes.TransOrd
 import Lean.Elab.Tactic
 
@@ -22,7 +22,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w} {m : Type w → Type w}
 
-namespace Std.DOrderedTree.Internal.Impl
+namespace Std.DTreeMap.Internal.Impl
 
 /-- Predicate for local balance at a node of the tree. We don't provide API for this, preferring
 instead to use automation to dispatch goals about balance. -/
@@ -73,7 +73,7 @@ elab "as_aux_lemma" " => " s:tacticSeq : tactic => liftMetaTactic fun mvarId => 
   unless mvars.isEmpty do
     throwError "Left-over goals, cannot abstract"
   let e ← instantiateMVars (mkMVar mvarId)
-  let e ← mkAuxTheorem (`Std.DOrderedTree.Internal.Impl ++ (← mkFreshUserName `test)) (← mvarId.getType) e
+  let e ← mkAuxTheorem (`Std.DTreeMap.Internal.Impl ++ (← mkFreshUserName `test)) (← mvarId.getType) e
   mvarId.assign e
   return []
 

@@ -4,8 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
 import Orderedtree.Classes.LawfulEqOrd
-import Orderedtree.DOrderedTree.Internal.Impl.Attr
-import Orderedtree.DOrderedTree.Internal.Impl.Balancing
+import Orderedtree.DTreeMap.Internal.Impl.Attr
+import Orderedtree.DTreeMap.Internal.Impl.Balancing
 import Orderedtree.Classes.TransOrd
 
 /-!
@@ -21,7 +21,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w} {m : Type w → Type w}
 
-namespace Std.DOrderedTree.Internal
+namespace Std.DTreeMap.Internal
 
 namespace Impl
 

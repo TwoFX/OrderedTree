@@ -3,8 +3,8 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.Impl
-import Orderedtree.DOrderedTree.Internal.Cell
+import Orderedtree.DTreeMap.Internal.Impl
+import Orderedtree.DTreeMap.Internal.Cell
 
 /-!
 # Model implementations of ordered tree functions
@@ -17,7 +17,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
-namespace Std.DOrderedTree.Internal
+namespace Std.DTreeMap.Internal
 
 namespace Impl
 
@@ -398,4 +398,4 @@ theorem insertSlow_eq_insertₘ [Ord α] {k : α} {v : β k} {l : Impl α β} (h
 
 end Impl
 
-end Std.DOrderedTree.Internal
+end Std.DTreeMap.Internal

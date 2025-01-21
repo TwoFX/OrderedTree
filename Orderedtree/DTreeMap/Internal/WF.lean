@@ -3,10 +3,10 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-import Orderedtree.DOrderedTree.Internal.Model
+import Orderedtree.DTreeMap.Internal.Model
 import Orderedtree.Classes.TransOrd
 import Orderedtree.Classes.Cut
-import Orderedtree.DOrderedTree.Internal.List.Associative
+import Orderedtree.DTreeMap.Internal.List.Associative
 import Std.Data.DHashMap.Internal.List.Associative
 
 /-!
@@ -20,7 +20,7 @@ universe u v w
 
 variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
-namespace Std.DOrderedTree.Internal.Impl
+namespace Std.DTreeMap.Internal.Impl
 
 @[simp] theorem toListModel_leaf : (.leaf : Impl α β).toListModel = [] := rfl
 @[simp] theorem toListModel_inner {sz k v l r} :
@@ -664,4 +664,4 @@ theorem WF.ordered [Ord α] [TransOrd α] {l : Impl α β} (h : WF l) : l.Ordere
   · exact ordered_empty
   · exact ordered_insert ‹_› ‹_›
 
-end Std.DOrderedTree.Internal.Impl
+end Std.DTreeMap.Internal.Impl

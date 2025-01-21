@@ -1,8 +1,8 @@
-import Orderedtree.DOrderedTree.Internal.Impl
-import Orderedtree.DOrderedTree.Internal.Model
-import Orderedtree.DOrderedTree.Internal.WF
-import Orderedtree.DOrderedTree.Raw
-import Orderedtree.DOrderedTree.Basic
+import Orderedtree.DTreeMap.Internal.Impl
+import Orderedtree.DTreeMap.Internal.Model
+import Orderedtree.DTreeMap.Internal.WF
+import Orderedtree.DTreeMap.Raw
+import Orderedtree.DTreeMap.Basic
 import Orderedtree.Examples.InversionCount
-import Orderedtree.OrderedTree.Lemmas
-import Orderedtree.OrderedTree.RawLemmas
+import Orderedtree.TreeMap.Lemmas
+import Orderedtree.TreeMap.RawLemmas
