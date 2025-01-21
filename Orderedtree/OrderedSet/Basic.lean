@@ -36,6 +36,9 @@ def insert (l : OrderedSet α cmp) (a : α) : OrderedSet α cmp :=
 def contains (l : OrderedSet α cmp) (a : α) : Bool :=
   l.inner.contains a
 
+instance : Membership α (OrderedSet α cmp) where
+  mem m a := m.contains a
+
 end OrderedSet
 
 end Std

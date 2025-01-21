@@ -25,9 +25,12 @@ structure Raw (α : Type u) (β : α → Type v) (_cmp : α → α → Ordering)
 namespace Raw
 
 /-- Unbundled well-formedness invariant for `Raw α β cmp`. -/
-structure WF (l : Raw α β cmp) where
+structure WF (t : Raw α β cmp) where
   /-- Internal implementation detail of the binary search tree. -/
-  out : letI : Ord α := ⟨cmp⟩; l.inner.WF
+  out : letI : Ord α := ⟨cmp⟩; t.inner.WF
+
+instance {t : Raw α β cmp} : Coe t.WF (letI : Ord α := ⟨cmp⟩; t.inner.WF) where
+  coe h := h.out
 
 /-- Creates a new empty binary search tree. -/
 @[inline]
@@ -52,6 +55,9 @@ def insertFast (l : Raw α β cmp) (h : l.WF) (a : α) (b : β a) : Raw α β cm
 @[inline]
 def contains (l : Raw α β cmp) (a : α) : Bool :=
   letI : Ord α := ⟨cmp⟩; l.inner.contains a
+
+instance : Membership α (Raw α β cmp) where
+  mem m a := m.contains a
 
 end Raw
 

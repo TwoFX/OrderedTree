@@ -37,6 +37,9 @@ def insert (l : OrderedTree α β cmp) (a : α) (b : β) : OrderedTree α β cmp
 def contains (l : OrderedTree α β cmp) (a : α) : Bool :=
   l.inner.contains a
 
+instance : Membership α (OrderedTree α β cmp) where
+  mem m a := m.contains a
+
 end OrderedTree
 
 end Std

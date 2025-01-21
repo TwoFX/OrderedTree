@@ -19,12 +19,9 @@ universe u v
 
 namespace Std.DOrderedTree
 
-variable {α : Type u} {β : α → Type v} {cmp : α → α → Ordering} {t : DOrderedTree α β cmp}
+attribute [local instance] TransOrd.ofTransCmp
 
-private instance {cmp : α → α → Ordering} [TransCmp cmp] : letI _ : Ord α := ⟨cmp⟩; TransOrd α :=
-  let _ : Ord α := ⟨cmp⟩
-  have _ : OrientedOrd α := ⟨⟩
-  ⟨TransCmp.le_trans⟩
+variable {α : Type u} {β : α → Type v} {cmp : α → α → Ordering} {t : DOrderedTree α β cmp}
 
 theorem isEmpty_empty : (empty : DOrderedTree α β cmp).isEmpty :=
   Impl.isEmpty_empty
@@ -32,12 +29,12 @@ theorem isEmpty_empty : (empty : DOrderedTree α β cmp).isEmpty :=
 theorem mem_iff_contains {k : α} : k ∈ t ↔ t.contains k :=
   Impl.mem_iff_contains
 
-theorem contains_congr [TransCmp cmp] {k k' : α} (hab : cmp k k' = .eq) :
+theorem contains_congr [TransCmp cmp] {k k' : α} (hab : cmp k k' == .eq) :
     t.contains k = t.contains k' :=
-  Impl.contains_congr hab
+  Impl.contains_congr t.wf hab
 
-theorem mem_congr [TransCmp cmp] {k k' : α} (hab : cmp k k' = .eq) : k ∈ t ↔ k' ∈ t :=
-  Impl.mem_congr hab
+theorem mem_congr [TransCmp cmp] {k k' : α} (hab : cmp k k' == .eq) : k ∈ t ↔ k' ∈ t :=
+  Impl.mem_congr t.wf hab
 
 theorem contains_empty {k : α} : (empty : DOrderedTree α β cmp).contains k = false :=
   Impl.contains_empty
@@ -47,6 +44,6 @@ theorem mem_empty {k : α} : k ∉ (empty : DOrderedTree α β cmp) :=
 
 theorem contains_insert [TransCmp cmp] {k k' : α} {v : β k} :
     (t.insert k v).contains k' = (cmp k k' == .eq || t.contains k') :=
-  Impl.contains_insert t.inner t.wf
+  Impl.contains_insert t.wf
 
 end Std.DOrderedTree

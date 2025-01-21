@@ -15,15 +15,33 @@ set_option autoImplicit false
 
 universe u v
 
-variable {α : Type u} {β : Type v} {cmp : α → α → Ordering}
-
 namespace Std.OrderedSet.Raw
+
+attribute [local instance] TransOrd.ofTransCmp
+
+variable {α : Type u} {β : Type v} {cmp : α → α → Ordering} {t : OrderedSet.Raw α cmp}
 
 theorem isEmpty_empty : (empty : OrderedSet.Raw α cmp).isEmpty :=
   OrderedTree.Raw.isEmpty_empty
 
-theorem contains_insert [h : TransCmp cmp] (m : OrderedSet.Raw α cmp) (hm : m.WF) {k a : α} :
-    (m.insert k).contains a = (cmp k a == .eq || m.contains a) :=
-  OrderedTree.Raw.contains_insert _ hm.out
+theorem mem_iff_contains {k : α} : k ∈ t ↔ t.contains k :=
+  OrderedTree.Raw.mem_iff_contains
+
+theorem contains_congr [TransCmp cmp] (h : t.WF) {k k' : α} (hab : cmp k k' == .eq) :
+    t.contains k = t.contains k' :=
+  OrderedTree.Raw.contains_congr h hab
+
+theorem mem_congr [TransCmp cmp] (h : t.WF) {k k' : α} (hab : cmp k k' == .eq) : k ∈ t ↔ k' ∈ t :=
+  OrderedTree.Raw.mem_congr h hab
+
+theorem contains_empty {k : α} : (empty : OrderedSet.Raw α cmp).contains k = false :=
+  OrderedTree.Raw.contains_empty
+
+theorem mem_empty {k : α} : k ∉ (empty : OrderedSet.Raw α cmp) :=
+  OrderedTree.Raw.mem_empty
+
+theorem contains_insert [h : TransCmp cmp] (h : t.WF) {k a : α} :
+    (t.insert k).contains a = (cmp k a == .eq || t.contains a) :=
+  OrderedTree.Raw.contains_insert h
 
 end Std.OrderedSet.Raw

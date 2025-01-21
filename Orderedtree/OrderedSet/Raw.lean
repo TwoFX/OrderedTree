@@ -22,9 +22,12 @@ structure Raw (α : Type u) (cmp : α → α → Ordering) where
 
 namespace Raw
 
-structure WF (l : Raw α cmp) where
+structure WF (t : Raw α cmp) where
   /-- Internal implementation detail of the binary search tree. -/
-  out : l.inner.WF
+  out : t.inner.WF
+
+instance {t : Raw α cmp} : Coe t.WF t.inner.WF where
+  coe t := t.out
 
 @[inline]
 def empty : Raw α cmp :=
@@ -45,6 +48,9 @@ def insertFast (l : Raw α cmp) (h : l.WF) (a : α) : Raw α cmp :=
 @[inline]
 def contains (l : Raw α cmp) (a : α) : Bool :=
   l.inner.contains a
+
+instance : Membership α (Raw α cmp) where
+  mem m a := m.contains a
 
 end Raw
 

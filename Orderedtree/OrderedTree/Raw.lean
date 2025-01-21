@@ -28,6 +28,9 @@ structure WF (l : Raw α β cmp) where
   /-- Internal implementation detail of the binary search tree. -/
   out : l.inner.WF
 
+instance {t : Raw α β cmp} : Coe t.WF t.inner.WF where
+  coe t := t.out
+
 @[inline, inherit_doc DOrderedTree.Raw.empty]
 def empty : Raw α β cmp :=
   ⟨DOrderedTree.Raw.empty⟩
@@ -47,6 +50,9 @@ def insertFast (l : Raw α β cmp) (h : l.WF) (a : α) (b : β) : Raw α β cmp 
 @[inline, inherit_doc DOrderedTree.Raw.contains]
 def contains (l : Raw α β cmp) (a : α) : Bool :=
   l.inner.contains a
+
+instance : Membership α (Raw α β cmp) where
+  mem m a := m.contains a
 
 end Raw
 
