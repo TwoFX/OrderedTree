@@ -25,6 +25,7 @@ namespace Impl
 ## General infrastructure
 -/
 
+/-- Internal implementation detail of the ordered set -/
 def contains' [Ord α] (k : α → Ordering) (l : Impl α β) : Bool :=
   match l with
   | .leaf => false
@@ -38,7 +39,7 @@ theorem contains'_compare [Ord α] {k : α} {l : Impl α β} :
     l.contains' (compare k) = l.contains k := by
   induction l <;> simp_all [contains, contains'] <;> rfl
 
-/-- General tree-traversal function. -/
+/-- Internal implementation detail of the ordered set. General tree-traversal function. -/
 def applyPartition [Ord α] (k : α → Ordering) (l : Impl α β)
     (f : List ((a : α) × β a) → (c : Cell α β k) → (l.contains' k → c.contains) → List ((a : α) × β a) → δ) : δ :=
   go [] l id []
@@ -52,6 +53,7 @@ where
     | .eq => f (ll ++ l.toListModel) (.ofEq k' v' h) (by simp) (r.toListModel ++ rr)
     | .gt => go (ll ++ l.toListModel ++ [⟨k', v'⟩]) r (fun hc => have := hm hc; by rw [← this, contains']; simp_all) rr
 
+/-- Internal implementation detail of the ordered set -/
 def applyCell [Ord α] (k : α) (l : Impl α β)
     (f : (c : Cell α β (compare k)) → (l.contains' (compare k) → c.contains) → δ) : δ :=
   match l with
@@ -62,6 +64,7 @@ def applyCell [Ord α] (k : α) (l : Impl α β)
     | .eq => f (.ofEq k' v' hcmp) (by simp)
     | .gt => applyCell k r (fun c h => f c fun h' => h (by simpa [contains', hcmp] using h'))
 
+/-- Internal implementation detail of the ordered set -/
 theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
     (f : (c : Cell α β (compare k)) → (l.contains' (compare k) → c.contains) → δ) :
     applyCell k l f = applyPartition (compare k) l (fun _ c hc _ => f c hc) := by
@@ -80,7 +83,10 @@ theorem applyCell_eq_applyPartition [Ord α] (k : α) (l : Impl α β)
   · simp [applyCell, applyPartition, applyPartition.go]
 
 variable (α β) in
-/-- Data structure used by the general tree-traversal function `explore`. -/
+/--
+Data structure used by the general tree-traversal function `explore`.
+Internal implementation detail of the ordered set
+-/
 inductive ExplorationStep [Ord α] (k : α → Ordering) where
   /-- Needle was less than key at this node: return key-value pair and unexplored right subtree,
       recusion will continue in left subtree. -/
@@ -92,7 +98,7 @@ inductive ExplorationStep [Ord α] (k : α → Ordering) where
       recusion will containue in right subtree. -/
   | gt : List ((a : α) × β a) → (a : α) → k a = .gt → β a → ExplorationStep k
 
-/-- General tree-traversal function. -/
+/-- General tree-traversal function. Internal implementation detail of the ordered set -/
 def explore {γ : Type w} [Ord α] (k : α → Ordering) (init : γ)
     (inner : γ → ExplorationStep α β k → γ) (l : Impl α β) : γ :=
   match l with
@@ -217,12 +223,14 @@ def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β 
 def lowerBound?ₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
   applyPartition (compare k) l fun _ c _ r => c.inner.or r.head?
 
+/-- Internal implementation detail of the ordered set -/
 def min?ₘ' [Ord α] (l : Impl α β) : Option ((a : α) × β a) :=
   explore (fun (_ : α) => .lt) none (fun sofar step =>
     match step with
     | .lt ky _ y _ => some ⟨ky, y⟩
     | .eq _ _ r => r.head?.or sofar) l
 
+/-- Internal implementation detail of the ordered set -/
 def min?ₘ [Ord α] (l : Impl α β) : Option ((a : α) × β a) :=
   applyPartition (fun (_ : α) => .lt) l fun _ _ _ r => r.head?
 

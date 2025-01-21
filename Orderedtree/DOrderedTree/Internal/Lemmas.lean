@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
 import Orderedtree.DOrderedTree.Internal.WF
+import Orderedtree.DOrderedTree.Internal.Impl.Transform
 
 /-!
 # API lemmas for `DOrderedTree.Impl`
@@ -64,15 +65,33 @@ macro_rules
 attribute [local instance] beqOfOrd
 attribute [local instance] equivBEq_of_transOrd
 
+variable {_ : Ord α} {t : Impl α β}
+
 theorem isEmpty_empty : isEmpty (empty : Impl α β) := by
   simp [Impl.isEmpty_eq_isEmpty]
 
-theorem contains_insert [Ord α] [TransOrd α] (m : Impl α β) (h : m.WF) {k a : α} {v : β k} :
-    (m.insert k v h.balanced).impl.contains a = (compare k a == .eq || m.contains a) := by
+theorem mem_iff_contains {k : α} : k ∈ t ↔ t.contains k :=
+  Iff.rfl
+
+theorem contains_congr {k k' : α} (hab : compare k k' = .eq) :
+    t.contains k = t.contains k' :=
+  sorry
+
+theorem mem_congr {k k' : α} (hab : compare k k' = .eq) : k ∈ t ↔ k' ∈ t := by
+  simp [mem_iff_contains, contains_congr hab]
+
+theorem contains_empty {k : α} : (empty : Impl α β).contains k = false :=
+  sorry
+
+theorem mem_empty {k : α} : k ∉ (empty : Impl α β) :=
+ sorry
+
+theorem contains_insert [TransOrd α] (t : Impl α β) (h : t.WF) {k a : α} {v : β k} :
+    (t.insert k v h.balanced).impl.contains a = (compare k a == .eq || t.contains a) := by
   simp_to_model using List.containsKey_insertEntry
 
-theorem contains_insertSlow [Ord α] [TransOrd α] (m : Impl α β) (h : m.WF) {k a : α} {v : β k} :
-    (m.insertSlow k v).contains a = (compare k a == .eq || m.contains a) := by
+theorem contains_insertSlow [TransOrd α] (t : Impl α β) (h : t.WF) {k a : α} {v : β k} :
+    (t.insertSlow k v).contains a = (compare k a == .eq || t.contains a) := by
   simp_to_model using List.containsKey_insertEntry
 
 end Std.DOrderedTree.Internal.Impl

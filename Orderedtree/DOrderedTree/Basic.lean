@@ -42,6 +42,9 @@ def insert (l : DOrderedTree α β cmp) (a : α) (b : β a) : DOrderedTree α β
 def contains (l : DOrderedTree α β cmp) (a : α) : Bool :=
   letI : Ord α := ⟨cmp⟩; l.inner.contains a
 
+instance : Membership α (DOrderedTree α β cmp) where
+  mem m a := m.contains a
+
 end DOrderedTree
 
 end Std

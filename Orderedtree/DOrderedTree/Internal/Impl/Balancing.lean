@@ -67,7 +67,7 @@ section
 
 open Lean Meta Elab Tactic
 
-/-- (Implementation detail) -/
+/-- Internal implementation detail of the ordered set -/
 elab "as_aux_lemma" " => " s:tacticSeq : tactic => liftMetaTactic fun mvarId => do
   let (mvars, _) ← runTactic mvarId s
   unless mvars.isEmpty do
@@ -77,7 +77,7 @@ elab "as_aux_lemma" " => " s:tacticSeq : tactic => liftMetaTactic fun mvarId => 
   mvarId.assign e
   return []
 
-/-- (Implementation detail) -/
+/-- Internal implementation detail of the ordered set -/
 scoped macro "tree_tac" : tactic => `(tactic|(
   subst_eqs
   repeat' split
@@ -95,7 +95,7 @@ scoped macro "tree_tac" : tactic => `(tactic|(
     omega
   ))
 
-/-- (Implementation detail) -/
+/-- Internal implementation detail of the ordered set -/
 scoped macro "✓" : term => `(term| by as_aux_lemma => tree_tac)
 
 end
