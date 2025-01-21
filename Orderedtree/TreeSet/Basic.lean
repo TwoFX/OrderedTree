@@ -15,7 +15,7 @@ variable {α : Type u} {cmp : α → α → Ordering}
 namespace Std
 
 structure TreeSet (α : Type u) (cmp : α → α → Ordering) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   inner : TreeMap α Unit cmp
 
 namespace TreeSet

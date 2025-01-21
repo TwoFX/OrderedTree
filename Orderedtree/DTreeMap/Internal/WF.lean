@@ -313,11 +313,11 @@ theorem ordered_updateAtKey [Ord α] [TransOrd α] {k : α}
       exact TransCmp.lt_of_eq_of_lt (OrientedCmp.eq_symm h₀) h₁
 
 /-!
-## Connecting the ordered trees machinery to the hash map machinery
+## Connecting the tree maps machinery to the hash map machinery
 -/
 
 /-- Internal function to derive a `BEq` instance from an `Ord` instance in order to connect the
-verification machinery for ordered trees to the verification machinery for hash maps. -/
+verification machinery for tree maps to the verification machinery for hash maps. -/
 def beqOfOrd [Ord α] : BEq α where
   beq a b := compare a b == .eq
 

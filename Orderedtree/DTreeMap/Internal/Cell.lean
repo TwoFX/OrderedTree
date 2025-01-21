@@ -14,7 +14,7 @@ variable {α : Type u} {β : α → Type v} {γ : α → Type w} {δ : Type w}
 
 namespace Std.DTreeMap.Internal
 
-/-- Type for representing the place in a binary search tree where a mapping for `k` could live. -/
+/-- Type for representing the place in a tree map where a mapping for `k` could live. -/
 structure Cell (α : Type u) [Ord α] (β : α → Type v) (k : α → Ordering) where
   /-- The mapping. -/
   inner : Option ((a : α) × β a)

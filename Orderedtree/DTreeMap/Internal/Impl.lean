@@ -32,11 +32,11 @@ def toListModel : Impl α β → List ((a : α) × β a)
   | .leaf => []
   | .inner _ k v l r => l.toListModel ++ ⟨k, v⟩ :: r.toListModel
 
-/-- The binary search tree property. -/
+/-- The tree map property. -/
 def Ordered [Ord α] (t : Impl α β) : Prop :=
   t.toListModel.Pairwise (fun a b => compare a.1 b.1 = .lt)
 
-/-- Well-formedness of ordered trees. -/
+/-- Well-formedness of tree maps. -/
 inductive WF [Ord α] : Impl α β → Prop where
   /-- This is the actual well-formedness invariant: the tree must be a balanced BST. -/
   | wf {t} : Balanced t → (∀ [TransOrd α], Ordered t) → WF t

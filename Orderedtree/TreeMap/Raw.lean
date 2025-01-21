@@ -18,14 +18,14 @@ namespace TreeMap
 
 @[inherit_doc DTreeMap.Raw]
 structure Raw (α : Type u) (β : Type v) (cmp : α → α → Ordering) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   inner : DTreeMap.Raw α (fun _ => β) cmp
 
 namespace Raw
 
 @[inherit_doc DTreeMap.Raw.WF]
 structure WF (l : Raw α β cmp) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   out : l.inner.WF
 
 instance {t : Raw α β cmp} : Coe t.WF t.inner.WF where

@@ -7,7 +7,7 @@ import Orderedtree.DTreeMap.Internal.Impl
 import Orderedtree.DTreeMap.Internal.Cell
 
 /-!
-# Model implementations of ordered tree functions
+# Model implementations of tree map functions
 -/
 
 set_option autoImplicit false

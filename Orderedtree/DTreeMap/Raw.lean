@@ -19,20 +19,20 @@ namespace DTreeMap
 /-- Binary search trees without a well-formedness invariant, suitable for use in nested inductive
 types. -/
 structure Raw (α : Type u) (β : α → Type v) (_cmp : α → α → Ordering) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   inner : Internal.Impl α β
 
 namespace Raw
 
 /-- Unbundled well-formedness invariant for `Raw α β cmp`. -/
 structure WF (t : Raw α β cmp) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   out : letI : Ord α := ⟨cmp⟩; t.inner.WF
 
 instance {t : Raw α β cmp} : Coe t.WF (letI : Ord α := ⟨cmp⟩; t.inner.WF) where
   coe h := h.out
 
-/-- Creates a new empty binary search tree. -/
+/-- Creates a new empty tree map. -/
 @[inline]
 def empty : Raw α β cmp :=
   ⟨Internal.Impl.empty⟩
@@ -41,12 +41,12 @@ def empty : Raw α β cmp :=
 def isEmpty (t : Raw α β cmp) : Bool :=
   t.inner.isEmpty
 
-/-- Inserts the mapping `(a, b)` into the binary search tree. -/
+/-- Inserts the mapping `(a, b)` into the tree map. -/
 @[inline]
 def insert (l : Raw α β cmp) (a : α) (b : β a) : Raw α β cmp :=
   letI : Ord α := ⟨cmp⟩; ⟨l.inner.insertSlow a b⟩
 
-/-- Inserts the mapping `(a, b)` into the binary search tree, but faster! -/
+/-- Inserts the mapping `(a, b)` into the tree map, but faster! -/
 @[inline]
 def insertFast (l : Raw α β cmp) (h : l.WF) (a : α) (b : β a) : Raw α β cmp :=
   letI : Ord α := ⟨cmp⟩; ⟨(l.inner.insert a b h.out.balanced).impl⟩

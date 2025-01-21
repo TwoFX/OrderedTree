@@ -17,13 +17,13 @@ namespace Std
 namespace TreeSet
 
 structure Raw (α : Type u) (cmp : α → α → Ordering) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   inner : TreeMap.Raw α Unit cmp
 
 namespace Raw
 
 structure WF (t : Raw α cmp) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   out : t.inner.WF
 
 instance {t : Raw α cmp} : Coe t.WF t.inner.WF where

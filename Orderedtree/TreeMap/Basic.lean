@@ -16,7 +16,7 @@ namespace Std
 
 @[inherit_doc DTreeMap]
 structure TreeMap (α : Type u) (β : Type v) (cmp : α → α → Ordering) where
-  /-- Internal implementation detail of the binary search tree. -/
+  /-- Internal implementation detail of the tree map. -/
   inner : DTreeMap α (fun _ => β) cmp
 
 namespace TreeMap
