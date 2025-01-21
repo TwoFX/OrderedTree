@@ -533,21 +533,21 @@ theorem isEmpty_eq_isEmpty (m : Impl α β) : m.isEmpty = m.toListModel.isEmpty 
 ### `lowerBound`
 -/
 
-theorem apply_lowerBound?ₘ [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
-    l.lowerBound?ₘ k = Std.DHashMap.Internal.List.lowerBound? k l.toListModel := by
-  rw [lowerBound?ₘ,
-    applyPartition_eq_apply_toListModel hlo (fun l _ => Std.DHashMap.Internal.List.lowerBound? k l)]
+theorem apply_lookupGEₘ [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.lookupGEₘ k = Std.DHashMap.Internal.List.lookupGE k l.toListModel := by
+  rw [lookupGEₘ,
+    applyPartition_eq_apply_toListModel hlo (fun l _ => Std.DHashMap.Internal.List.lookupGE k l)]
   intro ll rr c hc hp hll hrr
-  rw [List.append_assoc, lowerBound?_append_of_forall_mem_left hll,
-    lowerBound?_eq_head? _ (hp.sublist (by simp)), List.head?_append, Option.head?_toList]
+  rw [List.append_assoc, lookupGE_append_of_forall_mem_left hll,
+    lookupGE_eq_head? _ (hp.sublist (by simp)), List.head?_append, Option.head?_toList]
   simp only [List.mem_append, Option.mem_toList, Option.mem_def]
   rintro p (hp|hp)
   · exact Ordering.isLE_of_eq_eq (c.property _ hp)
   · exact Ordering.isLE_of_eq_lt (hrr _ hp)
 
-theorem apply_lowerBound? [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
-    l.lowerBound? k = Std.DHashMap.Internal.List.lowerBound? k l.toListModel := by
-  rw [lowerBound?_eq_lowerBound?ₘ, apply_lowerBound?ₘ hlo]
+theorem apply_lookupGE [Ord α] [TransOrd α] {k : α} {l : Impl α β} (hlo : l.Ordered) :
+    l.lookupGE k = Std.DHashMap.Internal.List.lookupGE k l.toListModel := by
+  rw [lookupGE_eq_lookupGEₘ, apply_lookupGEₘ hlo]
 
 /-!
 ### `min?`

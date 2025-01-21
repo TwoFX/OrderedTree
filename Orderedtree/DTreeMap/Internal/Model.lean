@@ -211,16 +211,16 @@ def getₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l : Impl α β) 
 def insertₘ [Ord α] (k : α) (v : β k) (l : Impl α β) (h : l.Balanced) : Impl α β :=
   updateCell k (fun _ => .of k v) l h |>.impl
 
-/-- Preliminary model implementation of the `lowerBound?` function. -/
-def lowerBound?ₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
+/-- Preliminary model implementation of the `lookupGE` function. -/
+def lookupGEₘ' [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
   explore (compare k) none (fun sofar step =>
     match step with
     | .lt ky _ y _ => some ⟨ky, y⟩
     | .eq _ c r => c.inner.or r.head? |>.or sofar
     | .gt _ _ _ _ => sofar) l
 
-/-- Model implementation of the `lowerBound?` function. -/
-def lowerBound?ₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
+/-- Model implementation of the `lookupGE` function. -/
+def lookupGEₘ [Ord α] (k : α) (l : Impl α β) : Option ((a : α) × β a) :=
   applyPartition (compare k) l fun _ c _ r => c.inner.or r.head?
 
 /-- Internal implementation detail of the ordered set -/
@@ -272,21 +272,21 @@ theorem get?_eq_get?ₘ [Ord α] [OrientedOrd α] [LawfulEqOrd α] (k : α) (l :
     all_goals simp_all [Cell.get?, Cell.ofEq]
   · simp [get?, applyCell]
 
-theorem lowerBound?_eq_lowerBound?ₘ' [Ord α] {k : α} {l : Impl α β} :
-    l.lowerBound? k = l.lowerBound?ₘ' k := by
-  rw [lowerBound?, lowerBound?ₘ']
-  suffices ∀ o, lowerBound?.go k o l = explore (compare k) o _ l from this none
+theorem lookupGE_eq_lookupGEₘ' [Ord α] {k : α} {l : Impl α β} :
+    l.lookupGE k = l.lookupGEₘ' k := by
+  rw [lookupGE, lookupGEₘ']
+  suffices ∀ o, lookupGE.go k o l = explore (compare k) o _ l from this none
   intro o
   induction l generalizing o
   · rename_i sz k' v' l r ih₁ ih₂
-    rw [lowerBound?.go, explore]
+    rw [lookupGE.go, explore]
     split <;> rename_i hcmp <;> split <;> rename_i hcmp' <;> try (simp [hcmp] at hcmp'; done)
     all_goals simp_all
-  · simp [lowerBound?.go, explore]
+  · simp [lookupGE.go, explore]
 
-theorem lowerBound?ₘ'_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
-    l.lowerBound?ₘ' k = l.lowerBound?ₘ k := by
-  rw [lowerBound?ₘ', explore_eq_applyPartition, lowerBound?ₘ]
+theorem lookupGEₘ'_eq_lookupGEₘ [Ord α] {k : α} {l : Impl α β} :
+    l.lookupGEₘ' k = l.lookupGEₘ k := by
+  rw [lookupGEₘ', explore_eq_applyPartition, lookupGEₘ]
   · simp only [Option.or_none]
   · intros k hcmp v ll c rr r init
     simp
@@ -304,9 +304,9 @@ theorem min?ₘ'_eq_min?ₘ [Ord α] {l : Impl α β} : l.min?ₘ' = l.min?ₘ :
 theorem min?_eq_min?ₘ [Ord α] {l : Impl α β} : l.min? = l.min?ₘ := by
   rw [min?_eq_min?ₘ', min?ₘ'_eq_min?ₘ]
 
-theorem lowerBound?_eq_lowerBound?ₘ [Ord α] {k : α} {l : Impl α β} :
-    l.lowerBound? k = l.lowerBound?ₘ k := by
-  rw [lowerBound?_eq_lowerBound?ₘ', lowerBound?ₘ'_eq_lowerBound?ₘ]
+theorem lookupGE_eq_lookupGEₘ [Ord α] {k : α} {l : Impl α β} :
+    l.lookupGE k = l.lookupGEₘ k := by
+  rw [lookupGE_eq_lookupGEₘ', lookupGEₘ'_eq_lookupGEₘ]
 
 theorem balanceL_eq_balance {k : α} {v : β k} {l r : Impl α β} {hlb hrb hlr} :
     balanceL k v l r hlb hrb hlr = balance k v l r hlb hrb (Or.inl hlr.erase) := by

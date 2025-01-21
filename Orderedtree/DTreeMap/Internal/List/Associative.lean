@@ -124,31 +124,31 @@ local instance [Ord α] [TransOrd α] : Std.Associative (min : (a : α) × β a 
 namespace Std.DHashMap.Internal.List
 
 /-- The smallest element of `xs` that is not less than `k`. -/
-def lowerBound? [Ord α] (k : α) (xs : List ((a : α) × β a)) : Option ((a : α) × β a) :=
+def lookupGE [Ord α] (k : α) (xs : List ((a : α) × β a)) : Option ((a : α) × β a) :=
   xs.filter (fun p => compare k p.1 |>.isLE) |>.min?
 
 /-- Like `List.min?`, but using an `Ord` typeclass instead of a `Min` typeclass. -/
 def min?' [Ord α] (xs : List ((a : α) × β a)) : Option ((a : α) × β a) :=
   xs.min?
 
-theorem lowerBound?_mem [Ord α] {xs : List ((a : α) × β a)} {k : α} {p : (a : α) × β a} (h : lowerBound? k xs = some p) :
+theorem lookupGE_mem [Ord α] {xs : List ((a : α) × β a)} {k : α} {p : (a : α) × β a} (h : lookupGE k xs = some p) :
     p ∈ xs := by
-  rw [lowerBound?] at h
+  rw [lookupGE] at h
   have := List.min?_mem (@min_eq_or _ _ _) h
   simp at this
   exact this.1
 
 /-- The smallest element of `xs` that is greater than `k`. -/
-def upperBound? [Ord α] (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
+def lookupGT [Ord α] (xs : List ((a : α) × β a)) (k : α) : Option ((a : α) × β a) :=
   xs.filter (fun p => compare k p.1 = .lt) |>.min?
 
 @[simp]
-theorem lowerBound?_nil [Ord α] {k : α} : lowerBound? k ([] : List ((a : α) × β a)) = none := rfl
+theorem lookupGE_nil [Ord α] {k : α} : lookupGE k ([] : List ((a : α) × β a)) = none := rfl
 
--- theorem lowerBound?_cons [Ord α] [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
---     lowerBound? (⟨k, v⟩ :: l) a =
---       if compare k a = .lt then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
---   rw [lowerBound?, List.filter_cons]
+-- theorem lookupGE_cons [Ord α] [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
+--     lookupGE (⟨k, v⟩ :: l) a =
+--       if compare k a = .lt then lookupGE l a else some ((lookupGE l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+--   rw [lookupGE, List.filter_cons]
 --   simp only [decide_eq_true_eq]
 --   split
 --   · rw [List.min?_cons]
@@ -157,13 +157,13 @@ theorem lowerBound?_nil [Ord α] {k : α} : lowerBound? k ([] : List ((a : α) �
 --     · rfl
 --   · next h =>
 --     rw [not_le_iff_lt] at h
---     simp [h, lowerBound?]
+--     simp [h, lookupGE]
 
--- theorem lowerBound?_cons_eq_self [TransOrd α] {l : List ((a : α) × β a)} {p : (a : α) × β a} {k : α}
---     (hp : k ≤ p.1) (hl : ∀ q ∈ l, q.1 < k ∨ p.1 ≤ q.1) : lowerBound? (p :: l) k = some p := by
---   rw [lowerBound?_cons]
+-- theorem lookupGE_cons_eq_self [TransOrd α] {l : List ((a : α) × β a)} {p : (a : α) × β a} {k : α}
+--     (hp : k ≤ p.1) (hl : ∀ q ∈ l, q.1 < k ∨ p.1 ≤ q.1) : lookupGE (p :: l) k = some p := by
+--   rw [lookupGE_cons]
 --   simp only [not_lt_iff_le.2 hp, ↓reduceIte, Option.some.injEq]
---   rw [lowerBound?]
+--   rw [lookupGE]
 --   cases h : (l.filter (fun p => k ≤ p.1)).min? with
 --   | none => simp
 --   | some q =>
@@ -184,34 +184,34 @@ theorem lowerBound?_nil [Ord α] {k : α} : lowerBound? k ([] : List ((a : α) �
 --   · rw [containsKey_congr (BEq.symm h), containsKey_of_mem hp] at hk
 --     contradiction
 
--- theorem lowerBound?_of_perm [TransOrd α] {l l' : List ((a : α) × β a)} (hll' : List.Perm l l') {k : α} (hl : DistinctKeys l) :
---     lowerBound? l k = lowerBound? l' k := by
+-- theorem lookupGE_of_perm [TransOrd α] {l l' : List ((a : α) × β a)} (hll' : List.Perm l l') {k : α} (hl : DistinctKeys l) :
+--     lookupGE l k = lookupGE l' k := by
 --   induction hll' with
 --   | nil => rfl
---   | @cons x l l' _ ih => rw [lowerBound?_cons, lowerBound?_cons, ih hl.tail]
+--   | @cons x l l' _ ih => rw [lookupGE_cons, lookupGE_cons, ih hl.tail]
 --   | swap x y l =>
---     rw [lowerBound?_cons, lowerBound?_cons, lowerBound?_cons, lowerBound?_cons]
+--     rw [lookupGE_cons, lookupGE_cons, lookupGE_cons, lookupGE_cons]
 --     split <;> split <;> try (simp; done)
 --     rename_i hyk hxk
 --     have hxy : x.1 < y.1 ∨ y.1 < x.1 :=
 --       lt_or_lt_of_containsKey_eq_false (List.mem_cons_self _ _) hl.containsKey_eq_false
---     cases lowerBound? l k with
+--     cases lookupGE l k with
 --     | none => simpa using (min_comm_of_lt_or_lt hxy).symm
 --     | some p => simp [← Std.Associative.assoc (op := min), min_comm_of_lt_or_lt hxy]
 --   | trans h₁ _ ih₁ ih₂ => rw [ih₁ hl, ih₂ (hl.perm h₁.symm)]
 
--- theorem lowerBound?_replaceEntry_cons_of_beq [TransOrd α] {l : List ((a : α) × β a)}
---     {k a : α} {v : β k} {p : (a : α) × β a} (h : p.1 == k) : lowerBound? (replaceEntry k v (p :: l)) a =
---       if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
---   rw [replaceEntry_cons_of_true h, lowerBound?_cons]
+-- theorem lookupGE_replaceEntry_cons_of_beq [TransOrd α] {l : List ((a : α) × β a)}
+--     {k a : α} {v : β k} {p : (a : α) × β a} (h : p.1 == k) : lookupGE (replaceEntry k v (p :: l)) a =
+--       if k < a then lookupGE l a else some ((lookupGE l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+--   rw [replaceEntry_cons_of_true h, lookupGE_cons]
 
--- theorem lowerBound?_replaceEntry_of_containsKey_eq_true [TransOrd α] {l : List ((a : α) × β a)}
+-- theorem lookupGE_replaceEntry_of_containsKey_eq_true [TransOrd α] {l : List ((a : α) × β a)}
 --       {k : α} {v : β k} {a : α} (h : containsKey k l) (hl : DistinctKeys l) :
---     lowerBound? (replaceEntry k v l) a = if k < a then lowerBound? l a else some ((lowerBound? l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+--     lookupGE (replaceEntry k v l) a = if k < a then lookupGE l a else some ((lookupGE l a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
 --   obtain ⟨l', hl'⟩ := perm_cons_getEntry h
---   rw [lowerBound?_of_perm (replaceEntry_of_perm hl hl') hl.replaceEntry]
---   rw [lowerBound?_replaceEntry_cons_of_beq (by simpa using getKey_beq _)]
---   rw [lowerBound?_of_perm hl' hl, lowerBound?_cons]
+--   rw [lookupGE_of_perm (replaceEntry_of_perm hl hl') hl.replaceEntry]
+--   rw [lookupGE_replaceEntry_cons_of_beq (by simpa using getKey_beq _)]
+--   rw [lookupGE_of_perm hl' hl, lookupGE_cons]
 --   split <;> split
 --   · rfl
 --   · rename_i h₁ h₂
@@ -220,7 +220,7 @@ theorem lowerBound?_nil [Ord α] {k : α} : lowerBound? k ([] : List ((a : α) �
 --     contradiction
 --   · simp
 --   · have hk : k ≤ getKey k l h := le_of_beq (BEq.symm (getKey_beq h))
---     cases lowerBound? l' a with
+--     cases lookupGE l' a with
 --     | none => simp [min_def', hk]
 --     | some p =>
 --       simp only [Option.elim_some, Option.some.injEq]
@@ -228,27 +228,27 @@ theorem lowerBound?_nil [Ord α] {k : α} : lowerBound? k ([] : List ((a : α) �
 --       congr 1
 --       simp [min_def', hk]
 
--- theorem lowerBound?_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : DistinctKeys xs) :
---     lowerBound? (insertEntry k v xs) a =
---       if k < a then lowerBound? xs a else some ((lowerBound? xs a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
+-- theorem lookupGE_insertEntry [TransOrd α] (xs : List ((a : α) × β a)) (k : α) (v : β k) (a : α) (h : DistinctKeys xs) :
+--     lookupGE (insertEntry k v xs) a =
+--       if k < a then lookupGE xs a else some ((lookupGE xs a).elim ⟨k, v⟩ (min ⟨k, v⟩)) := by
 --   rw [insertEntry]
 --   cases hc : containsKey k xs
---   · rw [cond_false, lowerBound?_cons]
---   · rw [cond_true, lowerBound?_replaceEntry_of_containsKey_eq_true hc h]
+--   · rw [cond_false, lookupGE_cons]
+--   · rw [cond_true, lookupGE_replaceEntry_of_containsKey_eq_true hc h]
 
-theorem lowerBound?_append_of_forall_mem_left [Ord α] [TransOrd α] {l₁ l₂ : List ((a : α) × β a)}
+theorem lookupGE_append_of_forall_mem_left [Ord α] [TransOrd α] {l₁ l₂ : List ((a : α) × β a)}
     {k : α} (h : ∀ p ∈ l₁, compare k p.1 = .gt) :
-    lowerBound? k (l₁ ++ l₂) = lowerBound? k l₂ := by
-  rw [lowerBound?, lowerBound?, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append]
+    lookupGE k (l₁ ++ l₂) = lookupGE k l₂ := by
+  rw [lookupGE, lookupGE, List.filter_append, List.filter_eq_nil_iff.2, List.nil_append]
   refine fun p hp => by simpa using h p hp
 
 theorem min?'_eq_head? [Ord α] {l : List ((a : α) × β a)}
     (hl : l.Pairwise (fun a b => compare a.1 b.1 = .lt)) : min?' l = l.head? := by
   rw [min?', List.min?_eq_head? (hl.imp min_eq_left_of_lt)]
 
-theorem lowerBound?_eq_head? [Ord α] {l : List ((a : α) × β a)} {k : α} (h : ∀ p ∈ l, compare k p.1 |>.isLE)
-    (hl : l.Pairwise (fun a b => compare a.1 b.1 = .lt)) : lowerBound? k l = l.head? := by
-  rw [lowerBound?, List.filter_eq_self.2 h, List.min?_eq_head? (hl.imp min_eq_left_of_lt)]
+theorem lookupGE_eq_head? [Ord α] {l : List ((a : α) × β a)} {k : α} (h : ∀ p ∈ l, compare k p.1 |>.isLE)
+    (hl : l.Pairwise (fun a b => compare a.1 b.1 = .lt)) : lookupGE k l = l.head? := by
+  rw [lookupGE, List.filter_eq_self.2 h, List.min?_eq_head? (hl.imp min_eq_left_of_lt)]
 
 /-
 /-- The number of entries whose key is strictly less than the given key. -/

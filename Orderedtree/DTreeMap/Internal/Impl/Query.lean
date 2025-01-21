@@ -139,7 +139,7 @@ end Const
 
 /-- The smallest element of `t` that is not less than `k`. Also known as `lookupGE` or `ceil`. -/
 @[inline]
-def lowerBound? [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
+def lookupGE [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
 where
   go (best : Option ((a : α) × β a)) : Impl α β → Option ((a : α) × β a)
@@ -151,7 +151,7 @@ where
 
 /-- The smallest element of `t` that is greater than `k`. Also known as `lookupGT` or `higher`. -/
 @[inline]
-def upperBound? [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
+def lookupGT [Ord α] (k : α) : Impl α β → Option ((a : α) × β a) :=
   go none
 where
   go (best : Option ((a : α) × β a)) : Impl α β → Option ((a : α) × β a)
