@@ -25,7 +25,9 @@ variable {α : Type u} {β : α → Type v} {_ : Ord α} {t : Impl α β}
 /-- Internal implementation detail of the hash map -/
 scoped macro "wf_trivial" : tactic => `(tactic|
   repeat (first
-    | apply WF.ordered | apply WF.balanced | apply WF.insert | apply WF.insertSlow | assumption
+    | apply WF.ordered | apply WF.balanced | apply WF.insert | apply WF.insertSlow
+    | apply Ordered.distinctKeys
+    | assumption
     ))
 
 /-- Internal implementation detail of the hash map -/
@@ -45,7 +47,7 @@ private def congrNames : MacroM (Array (TSyntax `term)) := do
     ← `(getValue?_of_perm _), ← `(getValue_of_perm _), ← `(getValueCast_of_perm _),
     ← `(getValueCast!_of_perm _), ← `(getValueCastD_of_perm _), ← `(getValue!_of_perm _),
     ← `(getValueD_of_perm _), ← `(getKey?_of_perm _), ← `(getKey_of_perm _), ← `(getKeyD_of_perm _),
-    ← `(getKey!_of_perm _)]
+    ← `(getKey!_of_perm _), ← `(min?_of_perm _)]
 
 /-- Internal implementation detail of the hash map -/
 scoped syntax "simp_to_model" ("using" term)? : tactic
@@ -95,16 +97,13 @@ theorem contains_insertSlow [TransOrd α] (h : t.WF) {k a : α} {v : β k} :
 theorem min?_empty : min? (empty : Impl α β) = none := by
   rw [empty, min?]
 
-attribute [local instance] minSigmaOfOrd
-
 theorem min?_insert [TransOrd α] (h : t.WF) {k : α} {v : β k} :
     (t.insert k v h.balanced).impl.min? =
       some (match t.min? with
       | none => ⟨k, v⟩
-      | some w => min w ⟨k, v⟩)
+      | some w => if compare k w.fst |>.isLE then ⟨k, v⟩ else w)
       := by
-  simp_to_model
-  
+  simp_to_model using List.min?_insertKey
 
 end Std.DTreeMap.Internal.Impl
 

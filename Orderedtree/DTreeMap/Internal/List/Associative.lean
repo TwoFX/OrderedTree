@@ -313,6 +313,13 @@ theorem mem_min? [Ord α] [TransOrd α] (l : List ((a : α) × β a)) (he : l.is
     · simp at h
       simp [h]
 
+theorem mem_min?' [Ord α] [TransOrd α] (l : List ((a : α) × β a)) {he : (min?' l).isSome} :
+    (min?' l).get he ∈ l := by
+  apply mem_min?
+  cases l
+  · simp_all
+  · simp
+
 theorem eq_of_beq_and_mem [BEq α] [EquivBEq α] {a b : (a : α) × β a} {l : List ((a : α) × β a)} (he : a.1 == b.1) (hma : a ∈ l) (hmb : b ∈ l) (hd : DistinctKeys l) :
     a = b := by
   induction l
@@ -446,11 +453,7 @@ theorem min?_replaceEntry [Ord α] [TransOrd α] (k : α) (v : β k) (l : List (
       if containsKey k l then
         some (match min?' l with
           | none => ⟨k, v⟩
-          | some w =>
-            if k == w.fst then
-              ⟨k, v⟩
-            else
-              min ⟨k, v⟩ w)
+          | some w => if compare k w.fst |>.isLE then ⟨k, v⟩ else w)
       else
         min?' l := by
   cases h : containsKey k l
@@ -472,19 +475,14 @@ theorem min?_replaceEntry [Ord α] [TransOrd α] (k : α) (v : β k) (l : List (
             rw [Option.eq_some_iff_get_eq] at heq
             simp [heq.2] at this
             have := containsKey_of_mem this
-            rw [← containsKey_congr heq₂] at this
-            exact mem_replaceEntry_of_containsKey v this
+            exact mem_replaceEntry_of_containsKey v h
           · next h₁ =>
-            simp [min]
-            split
-            · exact mem_replaceEntry_of_containsKey v h
-            · next h₂ =>
-              have h₁ := Bool.not_eq_true _ ▸ h₁
-              apply mem_replaceEntry_of_bne_containsKey
-              · exact h₁
-              · rw [Option.eq_some_iff_get_eq] at heq
-                simp [heq.2.symm]
-                exact mem_min? _ <| isEmpty_eq_false_of_containsKey h
+            apply mem_replaceEntry_of_bne_containsKey
+            · simp at h₁
+              simp [beq_eq, h₁]
+            · rw [Option.eq_some_iff_get_eq] at heq
+              simp [heq.2.symm]
+              apply mem_min?'
       · intro e he
         cases h' : min?' l
         · have := min?_isSome_of_isEmpty_eq_false (isEmpty_eq_false_of_containsKey (by assumption))
@@ -495,38 +493,13 @@ theorem min?_replaceEntry [Ord α] [TransOrd α] (k : α) (v : β k) (l : List (
           rw [some_eq_min?_iff'] at h'
           · split
             · next heq =>
-              rw [beq_eq, beq_iff_eq] at heq
-              have hle := Ordering.isLE_of_eq_eq heq
-              apply TransCmp.le_trans
-              · exact hle
-              · have hce := containsKey_of_mem he
-                simp at hce
-                have heq := getKey_beq hce
-                rw [beq_eq, beq_iff_eq] at heq
-                have hle := Ordering.isLE_of_eq_eq heq
-                refine TransOrd.le_trans ?_ hle
-                apply h'.2
-                apply containsKey_getKey
-            · simp [min?_fst]
-              split
-              · next h =>
-                refine TransOrd.le_trans h ?_
-                have hce := containsKey_of_mem he
-                simp at hce
-                have heq := getKey_beq hce
-                rw [beq_eq, beq_iff_eq] at heq
-                have hle := Ordering.isLE_of_eq_eq heq
-                refine TransOrd.le_trans ?_ hle
-                apply h'.2
-                apply containsKey_getKey
-              · have hce := containsKey_of_mem he
-                simp at hce
-                have heq := getKey_beq hce
-                rw [beq_eq, beq_iff_eq] at heq
-                have hle := Ordering.isLE_of_eq_eq heq
-                refine TransOrd.le_trans ?_ hle
-                apply h'.2
-                apply containsKey_getKey
+              refine TransCmp.le_trans heq ?_
+              apply h'.2
+              have hce := containsKey_of_mem he
+              simpa using hce
+            · apply h'.2
+              have hce := containsKey_of_mem he
+              simpa using hce
           · exact isEmpty_eq_false_of_containsKey h
           · exact hl
     · simp [isEmpty_replaceEntry, isEmpty_eq_false_of_containsKey h]
@@ -537,12 +510,28 @@ theorem min?_insertKey [Ord α] [TransOrd α] (k : α) (v : β k) (l : List ((a 
     min?' (insertEntry k v l) =
       some (match min?' l with
         | none => ⟨k, v⟩
-        | some w => min ⟨k, v⟩ w) := by
+        | some w => if compare k w.fst |>.isLE then ⟨k, v⟩ else w) := by
   simp [insertEntry]
   cases h : containsKey k l
+  · simp [min?_cons]
+    rfl
   · simp
-  · simp
+    rw [min?_replaceEntry, if_pos h]
+    exact hl
 
+theorem min?_of_perm [Ord α] [TransOrd α] {l l' : List ((a : α) × β a)}
+    (hl : DistinctKeys l) (hp : l.Perm l') :
+    min?' l = min?' l' := by
+  cases he : l.isEmpty
+  · have he' : l'.isEmpty = false := hp.isEmpty_eq ▸ he
+    have hs : (min?' l).isSome := min?_isSome_of_isEmpty_eq_false he
+    have hs' : (min?' l').isSome := min?_isSome_of_isEmpty_eq_false he'
+    ext
+    simp
+    conv => congr <;> rw [eq_comm]
+    rw [some_eq_min?_iff' _ he hl, some_eq_min?_iff' _ he' <| hl.perm hp.symm]
+    simp [hp.mem_iff, containsKey_of_perm hp]
+  · simp_all
 
 -- theorem lookupGE_cons [Ord α] [TransOrd α] (l : List ((a : α) × β a)) (k : α) (v : β k) (a : α) :
 --     lookupGE (⟨k, v⟩ :: l) a =
