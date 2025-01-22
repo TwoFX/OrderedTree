@@ -81,7 +81,7 @@ theorem mem_congr [TransOrd α] (h : t.WF) {k k' : α} (hab : k == k') : k ∈ t
   simp [mem_iff_contains, contains_congr h hab]
 
 theorem contains_empty {k : α} : (empty : Impl α β).contains k = false := by
-  simp [contains]
+  simp [contains, empty]
 
 theorem mem_empty {k : α} : k ∉ (empty : Impl α β) := by
   simp [mem_iff_contains, contains_empty]
